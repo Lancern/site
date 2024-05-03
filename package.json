@@ -1,0 +1,27 @@
+{
+  "name": "site",
+  "type": "module",
+  "version": "0.0.1",
+  "author": {
+    "name": "Sirui Mu",
+    "email": "msrlancern@gmail.com"
+  },
+  "scripts": {
+    "astro": "astro",
+    "build": "astro check && astro build",
+    "check-fmt": "prettier --check .",
+    "dev": "astro dev",
+    "fmt": "prettier --write .",
+    "preview": "astro preview",
+    "start": "astro dev"
+  },
+  "dependencies": {
+    "astro": "^4.7.1"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.5.10",
+    "prettier": "^3.2.5",
+    "prettier-plugin-astro": "^0.13.0",
+    "typescript": "^5.4.5"
+  }
+}
