@@ -1,0 +1,44 @@
+---
+import Container from "@components/Container.astro";
+import Footer from "@components/Footer.astro";
+import Header from "@components/Header.astro";
+
+interface Props {
+  title: string;
+  hideHeader?: boolean;
+}
+
+const { title, hideHeader } = Astro.props;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+  </head>
+  <body>
+    <Container>
+      {!hideHeader && <Header />}
+      <div class="main">
+        <slot />
+      </div>
+    </Container>
+    <Footer />
+  </body>
+</html>
+
+<style>
+  body {
+    font-family: "Roboto", sans-serif;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  .main {
+    padding: 2rem 0;
+  }
+</style>

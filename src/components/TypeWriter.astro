@@ -1,0 +1,89 @@
+---
+interface Props {
+  textList: string[];
+}
+
+const { textList } = Astro.props;
+const textListJson = JSON.stringify(textList);
+---
+
+<span class="typewriter" id="typewriter" data-text-list={textListJson}></span>
+
+<style>
+  .typewriter {
+    font-family: CommitMono, "Monaspace Neon", Menlo, Consolas, "Courier New", Courier, monospace;
+    color: purple;
+    background: #eaeaea;
+    padding: 0.2em;
+    border-radius: 0.2em;
+  }
+
+  .typewriter::after {
+    content: "";
+    display: inline-block;
+    position: relative;
+    top: 0.2em;
+    width: 0.2em;
+    height: 1.3em;
+    background-color: black;
+    animation: blink-caret 1s step-end infinite;
+  }
+
+  @keyframes blink-caret {
+    from,
+    to {
+      background-color: transparent;
+    }
+    50% {
+      background-color: black;
+    }
+  }
+</style>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const typewriterSpan: HTMLSpanElement = document.getElementById("typewriter")!;
+    const textList: string[] = JSON.parse(typewriterSpan.dataset.textList!).filter(
+      (text: string) => text.length > 0,
+    );
+
+    if (textList.length === 0) {
+      return;
+    }
+
+    const APPEND_TEXT_INTERVAL = 150;
+    const DELETE_TEXT_INTERVAL = 100;
+    const DISPLAY_FULL_TEXT_INTERVAL = 2000;
+    const DISPLAY_EMPTY_TEXT_INTERVAL = 1000;
+
+    let currentTextIdx = 0;
+    let currentTextRenderingLength = 0;
+    const appendText = () => {
+      const currentText = textList[currentTextIdx];
+
+      currentTextRenderingLength++;
+      typewriterSpan.textContent = currentText.slice(0, currentTextRenderingLength);
+
+      if (currentTextRenderingLength >= currentText.length) {
+        setTimeout(deleteText, DISPLAY_FULL_TEXT_INTERVAL);
+      } else {
+        setTimeout(appendText, APPEND_TEXT_INTERVAL);
+      }
+    };
+    const deleteText = () => {
+      const currentText = textList[currentTextIdx];
+
+      currentTextRenderingLength--;
+      typewriterSpan.textContent = currentText.slice(0, currentTextRenderingLength);
+
+      if (currentTextRenderingLength <= 0) {
+        currentTextIdx = (currentTextIdx + 1) % textList.length;
+        setTimeout(appendText, DISPLAY_EMPTY_TEXT_INTERVAL);
+      } else {
+        setTimeout(deleteText, DELETE_TEXT_INTERVAL);
+      }
+    };
+
+    appendText();
+  });
+</script>

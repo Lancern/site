@@ -1,0 +1,59 @@
+---
+import Container from "@components/Container.astro";
+---
+
+<div class="header">
+  <a class="header-identity" href="/">
+    <img class="header-identity-avatar" src="/avatar.jpeg" height="64" width="64" />
+    <span class="header-identity-title">Lancern</span>
+  </a>
+  <nav class="header-nav">
+    <a class="header-nav-item" href="#">Posts</a>
+    <a class="header-nav-item" href="#">About</a>
+    <a class="header-nav-item" href="#">Friends</a>
+    <a class="header-nav-item" href="#">RSS</a>
+  </nav>
+</div>
+
+<style>
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    height: 100px;
+  }
+
+  .header-identity {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    color: black;
+  }
+
+  .header-identity-avatar {
+    border-radius: 50%;
+  }
+
+  .header-identity-title {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-left: 10px;
+  }
+
+  .header-nav {
+    display: flex;
+  }
+
+  .header-nav-item {
+    display: block;
+    text-decoration: none;
+    padding: 20px;
+    font-size: 1.2rem;
+    color: black;
+  }
+
+  .header-nav-item:hover {
+    text-decoration: underline;
+  }
+</style>
