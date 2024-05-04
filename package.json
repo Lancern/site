@@ -16,6 +16,7 @@
     "start": "astro dev"
   },
   "dependencies": {
+    "@astrojs/mdx": "^2.3.1",
     "astro": "^4.7.1"
   },
   "devDependencies": {

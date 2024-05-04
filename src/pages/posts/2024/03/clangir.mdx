@@ -1,0 +1,194 @@
+---
+layout: "@layouts/PostLayout.astro"
+title: ClangIR 现状与展望
+date: 2024-03-10
+category: Compiler
+tags: ["c++", "clang", "clangir", "llvm", "mlir"]
+---
+
+[ClangIR]（简称 CIR）是 LLVM 社区内的一个目前仍处于孵化状态（incubator）的新项目，其目的在于基于 [MLIR] 框架为 clang 前端设计一个抽象层次介于 Clang AST 和 LLVM IR 之间的新 IR，以满足 C/C++/CUDA 等 clang 前端所支持的语言的语言相关程序分析和优化任务。本文将对 CIR 项目目前的现状以及未来展望进行简单介绍。
+
+[ClangIR]: https://llvm.github.io/clangir/
+[MLIR]: https://mlir.llvm.org/
+
+## 背景与动机
+
+许多高级语言的编译器均采用多级中间表示（IR）来实现在不同的抽象层次上对代码进行分析和变换。以采用 LLVM 作为后端的 Rust 编译器 rustc 为例，按照抽象层次由高到低排列，rustc 中包含如下四种 IR：
+
+- [HIR]，即 High-Level IR 。HIR 可以由 Rust AST 直接生成，直接表示了 rust 源代码的结构。Rust 源代码中的宏、语法糖等结构在 HIR 上已经被全部展开。
+- [THIR]，即 Typed High-Level IR 。可以认为在 HIR 上执行类型推导和类型检查后即可得到 THIR 。
+- [MIR]，即 Mid-Level IR 。MIR 由 THIR 进一步下降得到，它不再忠实地反映 rust 源代码的结构，而是以 CFG 的形式直接表示源程序中蕴含的控制流和数据流信息。
+- LLVM IR ，由 MIR 进一步下降得到。
+
+[HIR]: https://rustc-dev-guide.rust-lang.org/hir.html
+[THIR]: https://rustc-dev-guide.rust-lang.org/thir.html
+[MIR]: https://rustc-dev-guide.rust-lang.org/mir/index.html
+
+IR 所处的抽象层次以及 IR 的内部结构设计决定了在这种 IR 上适合执行哪些程序分析和变换任务：
+
+- IR 的抽象层次越高，越贴近源代码，包含越多源代码信息和语言相关信息；IR 的抽象层次越低，越贴近目标代码，包含越多目标硬件信息。因此，语言相关的程序分析和优化任务适合基于高层次 IR 实现，目标相关的程序分析和优化任务则适合基于低层次 IR 实现。
+- 另一方面，采用类 AST 结构的 IR 能忠实反映源代码的语法结构信息，但往往缺乏语义信息；采用 CFG 结构、SoN 结构或其他图结构的 IR 往往能反映程序的语义（即控制流+数据流）信息，但往往已经失去源程序的语法信息。因此，需要了解源程序语法的程序分析任务适合在类似于 AST 的 IR 上实现，需要执行数据流分析的程序分析和优化任务适合在图结构 IR 上实现。
+
+例如，HIR 直接由 AST 得到，包含大量源代码中的结构信息，可以很方便地执行符号查找、类型检查、相似代码片段诊断等程序分析任务。但 HIR 是一个类 AST 结构的 IR，其中并不直接包含程序控制流和数据流信息，因此不适合作为各种数据流分析的 IR 。MIR 中提供了程序的控制流和数据流信息，适合执行数据流分析任务，另外由于 MIR 并未完全舍弃 rust 语言相关的信息（例如生命周期标记等），因此特别适合执行 Rust 语言相关的数据流分析任务，例如借用检查等。HIR 和 MIR 都没有包含和目标架构相关的信息，因此和目标架构相关的程序分析和优化任务则更适合基于包含这些信息的 LLVM IR 以及更低层次的 IR 来完成。
+
+与 rustc 相比，clang 的代码下降路径就显得非常直接了。从 clang AST 开始，经过语义分析后，clang 前端的代码生成模块（CodeGen）会直接生成 LLVM IR ，不会再使用任何中间 IR 。从 clang 工具链和编译器开发的角度来看，这种做法已经造成了一些问题。
+
+从 C/C++ 程序分析方面来看，目前 clang 缺少一个对数据流分析友好的、带有 C/C++ 语言相关信息的 IR ，这直接导致某些较为复杂的 C/C++ 语言相关的程序分析任务很难基于 clang 进行实现。一方面，clang AST 虽然忠实反映了程序源代码的结构，但并未直接反映程序的控制流和数据流信息，因此并不适用于数据流分析任务。另一方面，具有 SSA 形式的 LLVM IR 虽然非常适合数据流分析任务，但 LLVM IR 中并不包含 C/C++ 语言相关信息。这个问题对于 clang 来说尤为严重，因为 clang 不仅仅提供一个端对端的 C/C++ 编译器前端，其本身还可以作为一个库（libclang）用于开发各种下游工具。目前被广泛使用的 clangd 、clang-format 、clang-tidy 等工具都是基于 libclang 进行开发的。对复杂的 C/C++ 语言相关数据流分析任务支持的不到位直接导致这些工具目前难以提供更加规模化、精细化的程序分析和诊断功能。
+
+> 需要注意，目前 clang 中确实存在一个数据流分析框架。但这个数据流分析框架本质上是基于 clang AST 实现的，且游离于正常的 clang 代码生成路径之外，因此存在诸多问题。有一小部分 clang-tidy 检查已经基于这个数据流分析框架实现，但其诊断结果有时并不可靠。
+
+从 C/C++ 语言相关程序优化方面来看，C/C++ 语言相关程序分析能力的缺位直接导致这部分优化难以在 clang 中完成。目前 clang 仅仅能在 CodeGen 的过程中进行一些局部（通常是在一个 C/C++ 语句内部）代码优化，或在语义检查的过程中在 clang AST 上执行一些基于模式匹配的简单变换，难以通过一个更加全局的视角进行更深一步的语言相关优化。另外，某些需要全局信息或数据流信息的语言相关优化则被实现在了 LLVM 中端中，导致了许多被诟病的 LLVM 中端“过拟合” C/C++ 前端的问题。
+
+如本节开头所述，其他语言的编译器已经给出了解决上述问题的标准答案。计算机科学领域有一句名言，“没有什么事情是增加一个抽象层所解决不了的。~如果有，那就再加一层。~”标准答案就是在 clang AST 以及 LLVM IR 之间增加一层新的 IR，这个 IR 应该具备如下特点：
+
+- 最基本地，这个 IR 应该包含与 C/C++ 语言相关的信息，便于执行 C/C++ 语言相关的分析、诊断和优化任务；
+- 这个 IR 可以适当保留 C/C++ 源程序的结构信息，便于执行与程序结构相关的分析、诊断和优化任务；
+- 这个 IR 应该能直接反映程序的控制流和数据流信息，便于执行 C/C++ 语言相关的数据流分析任务。
+
+基于这样的设计准则，CIR 诞生了。
+
+## 试用方法
+
+CIR 还处于非常年轻和不成熟的状态，因此用户目前不应该将其应用于真实编译构建环境中。对于希望尝鲜的用户，本节将简要介绍如何试用 CIR 。
+
+对于最广大的编译器普通用户来说，最便捷的试用 CIR 的方法是使用 compiler explorer 上的 clangir 编译器。需要注意的是，compiler explorer 上的 clangir 编译器并非由 CIR 社区成员维护，而是由 compiler explorer 开发成员维护，因此可能存在一定的功能滞后。经本文作者测试，目前 compiler explorer 上的 clangir 编译器与主线的差距大约在一个月左右。
+
+对于希望体验最新的 CIR 功能的用户，目前唯一的办法是手动从源码构建 CIR 。有关如何拉取 CIR 代码仓库并从源码构建和运行 CIR 的方法，可以参见 CIR 项目网站上的相关页面。用户可能还需要预先了解如何从源码构建 LLVM 和 clang。
+
+## 总体设计
+
+CIR 是 clang 的一个子模块，基于 MLIR 框架设计和实现。下图比较直观地说明了 CIR 在 clang 中的位置以及 CIR 与 clang 和 MLIR 的一些交互关系。
+
+TODO
+
+为了方便区分，本自然段中余下部分将用 ClangIR 指代 CIR 项目，用 CIR 指代 ClangIR 所引入的中间表示本身。上图灰色的部分表示目前 clang 和 MLIR 中已有的部分，蓝色的部分表示 ClangIR 新增的内容。目前，CodeGen 模块会直接从 AST 生成 LLVM IR 。在引入 ClangIR 后，ClangIR 会首先通过一个新的 CIRGen 模块从 AST 生成 CIR 模块。在这个 CIR 模块上可以运行一系列的程序分析和优化 pass，得到优化后的 CIR 。ClangIR 会将优化后的 CIR 通过一个 MLIR dialect 转换 pass 转换为 MLIR LLVM dialect，最后该 dialect 将会生成 LLVM IR 。除了生成 LLVM IR 这一最主要的路径外，ClangIR 还允许将 CIR 转换为 MLIR 生态中的其他已有 dialect 。众所周知，MLIR 中已有不少支持并行和异构计算的方言，因此有理由相信这一特性可以大大增强 C/C++ 语言本身在并行和异构计算方面的能力。另外，各种程序分析 pass 在运行时可以产生诊断信息，这一特性可以方便下游 C/C++ 开发工具的开发。
+
+我们不妨通过一个简单的例子来直观感受一下 CIR 的具体设计。考虑下列的 C++ 源代码：
+
+```cpp
+int sum(int n) {
+  auto s = 0;
+  for (auto i = 1; i <= n; ++i)
+    s += i;
+  return s;
+}
+```
+
+其产生的 CIR 为：（受篇幅所限，不重要的部分有所删减）
+
+```mlir
+!s32i = !cir.int<s, 32>
+cir.func @_Z3sumi(%arg0: !s32i) -> !s32i extra( {inline = #cir.inline<no>, optnone = #cir.optnone} ) {
+  %0 = cir.alloca !s32i, cir.ptr <!s32i>, ["n", init] {alignment = 4 : i64}
+  %1 = cir.alloca !s32i, cir.ptr <!s32i>, ["__retval"] {alignment = 4 : i64}
+  %2 = cir.alloca !s32i, cir.ptr <!s32i>, ["s", init] {alignment = 4 : i64}
+  cir.store %arg0, %0 : !s32i, cir.ptr <!s32i>
+  %3 = cir.const(#cir.int<0> : !s32i) : !s32i
+  cir.store %3, %2 : !s32i, cir.ptr <!s32i>
+  cir.scope {
+    %6 = cir.alloca !s32i, cir.ptr <!s32i>, ["i", init] {alignment = 4 : i64}
+    %7 = cir.const(#cir.int<1> : !s32i) : !s32i
+    cir.store %7, %6 : !s32i, cir.ptr <!s32i>
+    cir.for : cond {
+      %8 = cir.load %6 : cir.ptr <!s32i>, !s32i
+      %9 = cir.load %0 : cir.ptr <!s32i>, !s32i
+      %10 = cir.cmp(le, %8, %9) : !s32i, !cir.bool
+      cir.condition(%10)
+    } body {
+      %8 = cir.load %6 : cir.ptr <!s32i>, !s32i
+      %9 = cir.load %2 : cir.ptr <!s32i>, !s32i
+      %10 = cir.binop(add, %9, %8) : !s32i
+      cir.store %10, %2 : !s32i, cir.ptr <!s32i>
+      cir.yield
+    } step {
+      %8 = cir.load %6 : cir.ptr <!s32i>, !s32i
+      %9 = cir.unary(inc, %8) : !s32i, !s32i
+      cir.store %9, %6 : !s32i, cir.ptr <!s32i>
+      cir.yield
+    }
+  }
+  %4 = cir.load %2 : cir.ptr <!s32i>, !s32i
+  cir.store %4, %1 : !s32i, cir.ptr <!s32i>
+  %5 = cir.load %1 : cir.ptr <!s32i>, !s32i
+  cir.return %5 : !s32i
+}
+```
+
+> CIR 基于 MLIR 进行设计与开发，因此深入理解 CIR 需要读者了解 MLIR 框架提供的基础概念。限于篇幅，本文不会介绍 MLIR 的相关基础内容，没有这部分基础的读者可以先自行阅读学习 [MLIR 入门手册](https://mlir.llvm.org/docs/Tutorials/)。
+
+从上面的例子可以看出 CIR 的一些基础设计理念。CIR 具有 SSA 形式，沿 def-use 链和 use-def 链可以直接追踪程序的数据流，方便各种数据流分析任务的进行。另外，得益于 MLIR 的设计，CIR 能够以结构化嵌套的方法组织自身。例如，对于 C/C++ 中的 for 循环语句，CIR 中有 cir.for operation 与之对应。这个操作包含三个 MLIR region，分别对应循环条件表达式（cond）、循环体（body）以及循环迭代表达式（step）。除此之外，C/C++ 语言中的“作用域”在 CIR 中也有 cir.scope operation 与之对应。这样的特点使得 CIR 能够部分保留 C/C++ 源代码中的某些关键代码结构信息用于语言相关的分析和优化任务。这些任务目前往往在 LLVM 中端实现，他们往往需要通过分析 LLVM IR 的 CFG 恢复必要的代码结构信息（如经典的循环结构的识别和恢复）。在 CIR 上进行这些分析则会更加直接和方便。
+
+可以再来看一个更 C++ 一点的例子：
+
+```cpp
+struct Animal {
+  virtual void walk();
+};
+void test(Animal &animal) {
+  animal.walk();
+}
+```
+
+其生成的 CIR 如下：
+
+```mlir
+!u32i = !cir.int<u, 32>
+!void = !cir.void
+!ty_22Animal22 = !cir.struct<struct "Animal" {!cir.ptr<!cir.ptr<!cir.func<!cir.int<u, 32> ()>>>} #cir.record.decl.ast>
+cir.func @_Z4testR6Animal(%arg0: !cir.ptr<!ty_22Animal22>) attributes {ast = #cir.function.decl.ast} {
+  %0 = cir.alloca !cir.ptr<!ty_22Animal22>, cir.ptr <!cir.ptr<!ty_22Animal22>>, ["animal", init] {alignment = 8 : i64}
+  cir.store %arg0, %0 : !cir.ptr<!ty_22Animal22>, cir.ptr <!cir.ptr<!ty_22Animal22>>
+  %1 = cir.load %0 : cir.ptr <!cir.ptr<!ty_22Animal22>>, !cir.ptr<!ty_22Animal22>
+  %2 = cir.cast(bitcast, %1 : !cir.ptr<!ty_22Animal22>), !cir.ptr<!cir.ptr<!cir.ptr<!cir.func<!void (!cir.ptr<!ty_22Animal22>)>>>>
+  %3 = cir.load %2 : cir.ptr <!cir.ptr<!cir.ptr<!cir.func<!void (!cir.ptr<!ty_22Animal22>)>>>>, !cir.ptr<!cir.ptr<!cir.func<!void (!cir.ptr<!ty_22Animal22>)>>>
+  %4 = cir.vtable.address_point( %3 : !cir.ptr<!cir.ptr<!cir.func<!void (!cir.ptr<!ty_22Animal22>)>>>, vtable_index = 0, address_point_index = 0) : cir.ptr <!cir.ptr<!cir.func<!void (!cir.ptr<!ty_22Animal22>)>>>
+  %5 = cir.load %4 : cir.ptr <!cir.ptr<!cir.func<!void (!cir.ptr<!ty_22Animal22>)>>>, !cir.ptr<!cir.func<!void (!cir.ptr<!ty_22Animal22>)>>
+  cir.call %5(%1) : (!cir.ptr<!cir.func<!void (!cir.ptr<!ty_22Animal22>)>>, !cir.ptr<!ty_22Animal22>) -> ()
+  cir.return
+}
+```
+
+这个例子展示了 CIR 的设计中一些有趣的小细节：
+
+- CIR 尽可能地保留了对于 C/C++ 语言相关的信息。在上面的例子中，结构 / 类的基本信息（名称、内存布局等）在 CIR 中仍然保留，在调用虚函数时 CIR 也明确地表示出了虚表查询的过程。
+- CIR 中的操作可以与 clang AST 上的节点相关联（注意 CIR 中散布的 `ast` 属性）。这一设计借鉴于其他编程语言的 IR 设计，可以最大程度地保证语言相关的分析和优化任务能够从 IR 上查询到自己想要的语言相关信息。
+
+限于篇幅，本节无法展开介绍 CIR 的所有设计细节。有兴趣进一步了解的读者可以前往 CIR 官方网站查阅相关资料进行学习。
+
+## 当前开发状态 & 未来展望
+
+CIR 最初诞生于 Meta 内部。在 Meta 内部封闭发展一段时间后，Bruno（CIR 项目负责人）于 2022 年 6 月向 LLVM 社区提交了[第一个 CIR RFC](https://discourse.llvm.org/t/rfc-an-mlir-based-clang-ir-cir/63319)，该 RFC 的接收标志着 CIR 正式成为 LLVM 社区的孵化项目。经过一年多的发展，CIR 项目已经初步取得了一些成果。2024 年 1 月末，Bruno 向 LLVM 社区提交了[将 CIR 合并至 Clang 主线开发的 RFC](https://discourse.llvm.org/t/rfc-upstreaming-clangir/76587) 。经过讨论，LLVM 社区已经一致同意该合并。这意味着 CIR 即将脱离“孵化”状态，其独立代码仓库将很快被合入 llvm-project 主仓库，并作为 clang 的一个子项目继续开发。目前合并工作已经在逐步进行中。合并期间的所有已有的和全新的 issue 和 PR 仍在原来的独立仓库内处理。
+
+本节将对 CIR 社区目前（截止 2024 年 3 月）取得的开发成果进行简单介绍，对当前仍存在的问题进行简单分析，并对未来可能的发展方向进行展望。
+
+### 基本 C/C++ 语言特性
+
+对 C/C++ 语言特性的支持是 CIR 项目的绝对基础。目前 CIR 已经支持相当数量的 C/C++ 语言特性，已经能编译一些较为简单的程序。但是，由于 C/C++ 是一门具有数十年历史的超级复杂的、功能特性极多的编程语言，因此即使 CIR 社区投入了大量精力（事实上大部分 CIR 社区开发力量都投入到了这个方向上）完善 CIR 的 C/C++ 语言特性支持，CIR 目前不支持的 C/C++ 特性也仍然有很多。可以说，目前如果将一个真实的 C/C++ 应用程序交由 CIR 编译，有极大的概率 CIR 无法完成编译，因为应用程序中使用了 CIR 还不支持的特性。让 CIR 支持所有的 C/C++ 语言特性以及所有的 clang 语言扩展将会是一项长期的、艰巨的任务。
+
+### 并行计算与异构计算
+
+MLIR 框架以其在并行计算和异构计算领域内优秀的生态而闻名。CIR 也是基于 MLIR 框架设计和实现的，在并行和异构计算方面可以充分利用 MLIR 的已有生态。需要注意到，目前所有与并行和异构计算相关的特性均处在非常早期的开发过程中，许多还仅停留于设想阶段。
+
+在并行计算方面，CIR 目前将主要支持 SIMD 和 OpenMP 两种范式。对于 SIMD，目前社区开发者正在为 CIR 添加向量类型和向量运算支持，在未来向量操作相关的基础设施成熟后或许还会添加自动向量化支持。OpenMP 相关的功能目前还没有实现，但已经提上了实现计划。
+
+在异构计算方面，CIR 目前将主要支持 CUDA 、OpenCL 、SYCL 和 OpenACC 四种平台和框架。异构计算的支持主要由 AMD / Nvidia / Meta 等大厂推进，目前这四种平台和框架的实现工作均还没有开始，但已经开始提上日程。目前 CIR 已经开放了一个 [GSoC 2024 项目](https://discourse.llvm.org/t/clangir-compile-gpu-kernels-using-clangir/76984)，该项目就是为 CIR 提供初步的 OpenCL GPU kernel 支持。
+
+### 程序分析和诊断
+
+CIR 项目开发者早在 CIR 项目开发的早期就基于 CIR 开发出了一个生命周期检查器的原型，作为 CIR 项目的初始动机之一。类似于 rust 语言的生命周期检查，基于 CIR 的生命周期检查器也能识别出程序中存在的潜在生命周期问题，例如 use-after-free 等。当然，受限于 C/C++ 类型系统的设计，CIR 的生命周期检查器无法像 rust 那样能够识别出程序中所有的生命周期问题。
+
+MLIR 生态内已经存在一个名为 [VAST] 的程序分析框架。这个程序分析框架实现了许多常用的通用程序分析算法，基于 MLIR 的中间表示可以很容易地接入 VAST 来享受自动化程序分析带来的好处。将 CIR 适配到 VAST 程序分析框架内是 CIR 社区目前的一个工作方向。
+
+[VAST]: https://github.com/trailofbits/vast
+
+### 代码优化
+
+目前 CIR 社区尚没有多余的力量开发出一个可运行的代码优化 pass 。然而，提供对 C/C++ 语言相关代码优化的支持是 CIR 构想中的重要一环，社区将会在 CIR 生态和基础设施进一步完善和成熟后在这一方面加大力量投入。目前社区内已经有零星的提案希望在 CIR 中实现一些 LLVM IR 上难以做到的 C/C++ 语言相关优化，例如更加激进的复制消除3 等。
+
+MLIR 生态内有一个名为 [polygeist] 的项目，该项目也是 LLVM 社区的孵化项目，其目标是为 MLIR 生态提供多面体优化和并行优化支持。使 CIR 和 polygeist 能够协同工作，从而让 C/C++ 能够享受到多面体优化领域丰富的研究成果，也是 CIR 目前正在进行的方向之一。
+
+[polygeist]: https://github.com/llvm/Polygeist
+
+## 总结
+
+本文简要介绍了 CIR 项目的发起背景和动机，简要介绍了其基本设计原则以及中间表示的具体设计，简要介绍了目前 CIR 项目的开发进展和未来发展方向。限于篇幅，本文不可能深入讨论 CIR 的每一个细节；为了给读者以宏观的认识，对各个方面只是泛泛而谈而已。CIR 项目欢迎开源社区中任何人以任何方式参与开发，如果读者希望更深一步了解 CIR 目前的状态甚至直接参与到 CIR 的开源开发中，可以直接前往其仓库和官方网站进一步学习。
