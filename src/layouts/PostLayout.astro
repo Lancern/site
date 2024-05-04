@@ -1,0 +1,73 @@
+---
+import BaseLayout from "@layouts/BaseLayout.astro";
+import BookmarkIcon from "@components/icon/BookmarkIcon.astro";
+import CalendarIcon from "@components/icon/CalendarIcon.astro";
+
+import type { PostFrontmatter } from "@scripts/posts";
+import CopyrightIcon from "@components/icon/CopyrightIcon.astro";
+
+const frontmatter: PostFrontmatter = Astro.props.frontmatter;
+
+let date = frontmatter.date;
+if (typeof date === "string") {
+  date = new Date(date);
+}
+let dateStr = date.toLocaleDateString();
+---
+
+<BaseLayout title={frontmatter.title + " - Lancern's Home"}>
+  <main>
+    <header class="post-header">
+      <h1 class="post-title">{frontmatter.title}</h1>
+      <div class="post-meta-line">
+        <div class="post-meta-item post-meta-date">
+          <CalendarIcon size={18} />
+          {dateStr}
+        </div>
+        <div class="post-meta-item post-meta-category">
+          <BookmarkIcon size={18} />
+          {frontmatter.category}
+        </div>
+        <a
+          class="post-meta-item post-meta-license"
+          href="https://creativecommons.org/licenses/by-sa/4.0/"
+          target="_blank"
+        >
+          <CopyrightIcon size={18} />
+          CC BY-SA 2.0
+        </a>
+      </div>
+    </header>
+    <slot />
+  </main>
+</BaseLayout>
+
+<style>
+  .post-header {
+    margin-top: 24px;
+    margin-bottom: 32px;
+  }
+
+  .post-title {
+    text-align: center;
+    margin-bottom: 12px;
+  }
+
+  .post-meta-line {
+    display: flex;
+    justify-content: center;
+    column-gap: 2em;
+    font-size: 0.9em;
+    color: #646464;
+  }
+
+  a.post-meta-item {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  a.post-meta-item:hover {
+    text-decoration: underline;
+  }
+</style>
