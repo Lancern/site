@@ -1,0 +1,231 @@
+---
+layout: "@layouts/PostLayout.astro"
+title: 定制点对象和 tag_invoke
+date: 2023-03-16
+category: C++
+tags: ["c++", "c++17", "c++20"]
+---
+
+泛型编程中，提供通用功能的库由于无法精确得知用户提供的对象的类型，往往只能采用效率不佳的通用算法实现功能。例如，STL 中提供的 `std::swap` 函数由于无法得知需要被交换的两个对象的类型，只能在内部创建一个临时对象并使用两次移动和一次额外的析构交换传入的两个对象：
+
+```cpp
+namespace std {
+  template <typename T>
+  void swap(T& first, T& second) {
+    T temp = std::move(first);
+    first = std::move(second);
+    second = std::move(temp);
+  }
+}
+```
+
+显然，某些具体的类型可以单独为自身提供比 `std::swap` 更加高效的 `swap` 的实现：
+
+```cpp
+namespace my {
+  class SomeType {
+    /**/
+
+    friend void swap(SomeType& first, SomeType& second) {
+      // Efficient swap implementation
+    }
+  };
+}
+```
+
+像 `std::swap` 这种库用户可以提供自定义实现的库功能接口就被称为库的定制点（Customization Point）。
+
+在 C++17 以前，C++ 标准库中的定制点都是以 C++ 函数形式暴露的接口，正如 `std::swap` 这样。这要求用户在泛型代码中调用这些定制点函数时必须按照类似于如下的语法进行调用：
+
+```cpp
+template <typename T>
+void foo(T& first, T& second) {
+  // do something ...
+
+  using std::swap;
+  swap(first, second);
+
+  // do something ...
+}
+```
+
+上述代码的工作原理基于对无限定函数名称（unqualified function name）的两阶段实参依赖查找（2-phase ADL）。在查找 `swap` 这样无限定的函数名称的声明时，名称查找将分为两个阶段进行。第一个阶段从 `foo` 函数的局部作用域开始，依次向更外层的作用域查找 `swap` 函数的声明，直到找到至少一个 swap 函数的声明为止。这一阶段将找到 `std::swap` 的声明。随后开始第二阶段查找，第二阶段从 `swap` 的参数类型 `T` 的作用域开始向上查找，直到找到至少一个 `swap` 函数的声明为止。这一阶段将找到 `my::swap` 的声明。最后将两阶段查找到的所有函数声明合并，得到两个重载决议候选 `std::swap` 和 `my::swap`；重载决议最终会选出 `my::swap` 作为被调用的函数。
+
+这种方法存在两个问题：
+
+1. 经验不足的用户很容易将上述代码写成 `std::swap(first, second)` 。一旦用户写成了这种形式，用户将只能使用 STL 提供的默认实现，无法享受具体的类型 T 自定义的更加高效的实现；
+2. 某些定制点对参数有一定约束，例如 `std::swap` 要求参数类型 `T` 必须满足具名要求 `Swappable` 。由于 `std::swap` 和 `my::swap` 本质上是独立的两个函数，因此用户提供的自定义实现（即 `my::swap`）的约束可能与库接口（即 `std::swap`）的约束不同，带来不一致性问题。
+
+## 定制点对象
+
+解决第一个问题的方法比较简单，我们可以在 `std::swap` 内部再做一次 ADL：
+
+```cpp
+namespace std {
+  namespace __details {
+    template <typename T>
+    void swap(T& first, T& second) {
+      T temp = std::move(first);
+      first = std::move(second);
+      second = std::move(temp);
+    }
+  }
+
+  template <typename T>
+  void swap(T& first, T& second) {
+    using __details::swap;
+    swap(first, second);
+  }
+}
+```
+
+这样即使用户不慎写了 `std::swap(first, second)`，也能享受到具体的类型 `T` 提供的自定义实现。
+
+上述第二个问题发生的原因在于当用户使用无限定名称调用 `swap` 函数时，用户可以直接调用到具体类型 T 提供的自定义实现 `my::swap`，完全绕开了库接口 `std::swap` ，也就绕开了库接口的约束检查。为了解决这个问题，我们可以想办法强制让用户只能直接调用 `std::swap`，在 `std::swap` 内部经过约束检查后再通过 ADL 调用 `my::swap` 。这种强制性由 2-phase ADL 的一条特殊规则提供。在 2-phase ADL 的第一阶段结束后，如果名称查找找到了一个对象而不是一个函数，那么第二阶段将不再进行。也就是说，如果我们将 `std::swap` 定义为一个对象而不是一个函数：
+
+```cpp
+namespace std {
+  struct swap_t {
+    template <typename T>
+    void operator()(T& first, T& second) const {
+      // ...
+    }
+  };
+  constexpr inline swap_t swap{};
+}
+```
+
+那么用户通过无限定名称调用 `swap` 时将永远只找到可调用对象 `swap`，无法再找到由具体类型 T 提供的自定义实现 `my::swap`，用户代码代码将永远调用 `swap` 对象。这样我们就解决了第二个问题。
+
+上述这种作为库的定制点的可调用对象就称为定制点对象（Customization Point Object，CPO），由 WG21 提案 [N4381](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2015/n4381.html) 最初提出，并于 C++17 合并进入标准。从 C++17 开始新引入的几乎所有 STL 定制点都由定制点对象充当。以 `std::ranges::begin` 定制点为例，它的定义不再是一个函数，而是一个可调用对象：
+
+```cpp
+namespace std::ranges {
+  struct begin_t {
+    template <range R>
+    auto operator()(R&& r) const {
+      using std::begin;
+      return begin(r);
+    }
+  };
+
+  constexpr inline begin_t begin{};
+}
+```
+
+## tag_invoke
+
+定制点在允许用户代码为具体类型提供更高效的实现的同时，也污染了用户代码的命名空间。如果用户代码希望定制 `std::ranges::begin` 的实现，那么用户代码命名空间就必须保留出 `begin` 这个标识符用于定制点。定制点数量一旦变多，很容易造成名称冲突等问题：
+
+```cpp
+namespace my {
+  class MyContainer {
+    // ...
+
+    friend iterator begin(MyContainer& container) { /* ... */ }
+    friend sentinel end(MyContainer& container) { /* ... */ }
+    friend const_iterator cbegin(MyContainer& container) { /* ... */ }
+    friend const_sentinel cend(MyContainer& container) { /* ... */ }
+    friend reverse_iterator rbegin(MyContainer& container) { /* ... */ }
+    friend reverse_sentinel rend(MyContainer& container) { /* ... */ }
+    friend const_reverse_iterator crbegin(MyContainer& container) { /* ... */ }
+    friend const_reverse_sentinel crend(MyContainer& container) { /* ... */ }
+    friend std::size_t size(const MyContainer& container) { /* ... */ }
+    // Even more ...
+  };
+}
+```
+
+为解决这个问题，WG21 提案 [P1895](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2019/p1895r0.pdf) 提出了 `tag_invoke` 机制，该提案有望随着 [sender / receiver 提案](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/p2300r6.html)一同合并进入 C++26 。该机制只需要在用户代码命名空间中预留一个 `tag_invoke` 标识符用于用户提供自定义的定制点实现，不同的库定制点则统一调用 `tag_invoke` 函数。不同的库定制点对应的 `tag_invoke` 自定义实现通过 `tag_invoke` 函数参数中的一个标签类型进行区分：
+
+```cpp
+namespace std::ranges {
+  struct begin_tag_t {};
+  struct end_tag_t {};
+
+  constexpr inline begin_tag_t begin_tag{};
+  constexpr inline end_tag_t end_tag{};
+
+  struct begin_t {
+    template <range R>
+    auto operator()(R&& r) const {
+      return tag_invoke(begin_tag, r);
+    }
+  };
+
+  struct end_t {
+    template <range R>
+    auto operator()(R&& r) const {
+      return tag_invoke(end_tag, r);
+    }
+  };
+
+  constexpr inline begin_t begin{};
+  constexpr inline end_t end{};
+}
+
+namespace my {
+  class MyContainer {
+    // ...
+    friend iterator tag_invoke(std::ranges::begin_tag_t,
+                               MyContainer& container) { /* ... */ }
+    friend sentinel tag_invoke(std::ranges::end_tag_t,
+                               MyContainer& container) { /* ... */ }
+  };
+}
+```
+
+可以看到，在采用 tag_invoke 方案后，库定制点 `std::ranges::begin` 以及 `std::ranges::end` 不再通过 ADL 调用 `begin` 以及 `end` 函数，而是通过 ADL 调用 `tag_invoke` 函数。`tag_invoke` 函数在用户侧实现；每个 `tag_invoke` 重载都对应到库中不同的定制点，各个重载的第一个参数是一个标签，其类型表示该重载为哪个定制点提供自定义实现。通过这种方式，用户侧的命名空间中只需要预留一个专用的 `tag_invoke` 标识符，不会对用户命名空间造成大面积污染。
+
+该方案还可以进一步简化，我们不需要创建专门的 `std::ranges::begin_tag_t` 等类型用作标签类型，而是可以用定制点对象本身的类型作为标签类型：
+
+```cpp
+namespace std::ranges {
+  struct begin_t {
+    template <range R>
+    auto operator()(R&& r) const {
+      return tag_invoke(begin_t{}, r);
+    }
+  };
+
+  struct end_t {
+    template <range R>
+    auto operator()(R&& r) const {
+      return tag_invoke(end_t{}, r);
+    }
+  };
+
+  constexpr inline begin_t begin{};
+  constexpr inline end_t end{};
+}
+namespace my {
+  class MyContainer {
+    // ...
+    friend iterator tag_invoke(std::ranges::begin_t,
+                               MyContainer& container) { /* ... */ }
+    friend sentinel tag_invoke(std::ranges::end_t,
+                               MyContainer& container) { /* ... */ }
+  };
+}
+```
+
+这就又引入了一个问题。`std::ranges::begin_t` 是库的定制点对象的类型，通常情况下属于库的内部实现；上述代码中却把库的内部实现暴露到了用户代码里面。为此，`tag_invoke` 提案给出了一个模板类型别名 `tag_t` 用于在用户代码中获取库定制点对应的标签类型：
+
+```cpp
+namespace std {
+  template <auto& Tag>
+  using tag_t = std::decay_t<decltype(Tag)>;
+}
+
+namespace my {
+  class MyContainer {
+    // ...
+    friend iterator tag_invoke(std::tag_t<std::ranges::begin>,
+                               MyContainer& container) { /* ... */ }
+    friend sentinel tag_invoke(std::tag_t<std::ranges::end>,
+                               MyContainer& container) { /* ... */ }
+  };
+}
+```
+
+这种方法也使得每个 `tag_invoke` 重载所对应的库定制点变得一目了然。
