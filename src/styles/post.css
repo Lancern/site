@@ -8,9 +8,6 @@
 
 .post-body code {
   font-size: 0.9em;
-}
-
-.post-body p code {
   padding: 0.2em 0.4em;
   background-color: #eaeaea;
   border-radius: 4px;
@@ -42,4 +39,10 @@
   padding: 1em;
   border-radius: 8px;
   line-height: 1.2em;
+}
+
+.post-body pre.astro-code code {
+  padding: 0;
+  background-color: inherit;
+  border-radius: 0;
 }
