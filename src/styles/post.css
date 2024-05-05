@@ -2,7 +2,10 @@
   line-height: 1.45em;
 }
 
-.post-body p {
+.post-body p,
+.post-body table,
+.post-body blockquote,
+.post-body pre {
   margin: 32px 0;
 }
 
@@ -23,10 +26,6 @@
   color: #646464;
 }
 
-.post-body blockquote p code {
-  background-color: #dadada;
-}
-
 .post-body blockquote :first-child {
   margin-top: 0;
 }
@@ -45,4 +44,29 @@
   padding: 0;
   background-color: inherit;
   border-radius: 0;
+}
+
+.post-body table {
+  min-width: 100%;
+}
+
+.post-body table,
+.post-body table th,
+.post-body table td {
+  border: 1px solid black;
+  border-collapse: collapse;
+}
+
+.post-body table thead {
+  background-color: #eaeaea;
+}
+
+.post-body table th,
+.post-body table td {
+  padding: 0.2em 0.5em;
+}
+
+.post-body blockquote p code,
+.post-body table code {
+  background-color: #dadada;
 }

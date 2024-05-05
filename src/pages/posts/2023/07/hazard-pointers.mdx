@@ -1,0 +1,301 @@
+---
+layout: "@layouts/PostLayout.astro"
+title: Hazard Pointers
+date: 2023-07-05
+category: C++
+tags: ["c++", "c++26", "concurrency"]
+---
+
+最近 C++ 标准委员会投票将 C++ 标准库提案 [P2530] 合入了 C++26 标准。本文将对该提案中包含的 hazard pointer 这一库特性进行介绍。
+
+[P2530]: https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/p2530r3.pdf
+
+## 动机
+
+### 无锁 Multiset
+
+我们来实现一个无锁数据结构。从 ADT 角度说，这个无锁数据结构类似于 multiset，支持三种操作：
+
+- `insert` 操作，将一个元素插入到数据结构中；
+- `erase` 操作，将一个元素从数据结构中删除；
+- `find` 操作，确定某个元素是否存在于数据结构中。
+
+前两个操作会改变数据结构的内部状态，因此我们将其统称为写操作。`find` 操作不会改变数据结构的内部状态，因此我们将其称为读操作。我们希望把这个数据结构用于一个读多写少的场景，因此我们假定数据结构的用户可以保证在同一时刻：
+
+- 至多有一个写线程可以访问数据结构；
+- 可以有多个读线程同时访问数据结构；
+- 写线程和读线程也可以同时访问数据结构。
+
+对于上述数据结构，我们首先定义出其中的数据类型：（为了简单，我们假定数据结构中存储的元素类型为 `int`）
+
+```cpp
+class LocklessMultiset {
+public:
+  void insert(int value);
+  bool erase(int value) noexcept;
+  bool find(int value) const noexcept;
+
+private:
+  struct Node {
+    std::atomic<Node*> next;
+    int value;
+  };
+
+  std::atomic<Node*> _head;
+};
+```
+
+我们使用一个无锁链表来存储数据结构中所有的元素。链表中每个节点的类型为 `Node` 。
+
+接下来我们依次尝试实现数据结构所支持的三种操作。首先是 `insert` 操作，它的实现比较简单，只需要新建一个链表节点并将其挂到链表上即可：
+
+```cpp
+void LocklessMultiset::insert(int value) {
+  Node* old_head = _head.load(std::memory_order_relaxed);
+  Node* node = new Node{old_head, value};
+  _head.store(node, std::memory_order_release);
+}
+```
+
+需要注意到，由于数据结构的用户已经保证同一时刻至多只有一个线程可以运行 `insert` 操作，因此在创建新的节点后我们可以直接将 `_head` 变更为新节点的指针而不需要使用任何的 compare-and-swap (CAS) 操作。
+
+然后是 `erase` 操作，它稍微复杂一点，需要首先遍历无锁链表并找到要删除的目标节点，然后将其从无锁链表中删除：
+
+```cpp
+bool LocklessMultiset::erase(int value) noexcept {
+  std::atomic<Node*>* pos = &_head;
+  Node* node;
+
+  while ((node = pos->load(std::memory_order_acquire))) {
+    if (node->value == value) {
+      Node* node_next = node->next.load(std::memory_order_relaxed);
+      pos->store(node_next, std::memory_order_relaxed);
+      break;
+    }
+    pos = &node->next;
+  }
+
+  delete node;
+  return node != nullptr;
+}
+```
+
+同样，由于同一时刻最多只有一个线程可以运行 `erase` 操作，因此 `erase` 的实现中也不需要使用任何的 CAS 操作。
+
+最后我们来实现 `find` 操作：
+
+```cpp
+bool LocklessMultiset::find(int value) const noexcept {
+  for (
+    Node* node = _head.load(std::memory_order_acquire);
+    node;
+    node = node->next.load(std::memory_order_acquire)
+  ) {
+    if (node->value == value) {
+      return true;
+    }
+  }
+  return false;
+}
+```
+
+由于 `find` 操作并不涉及对数据结构内部状态的修改，因此多个线程同时运行 `find` 操作显然不会有任何问题。但是，我们还没有考虑最后一种情况：当运行 `find` 的线程和运行 `erase` 等写操作的线程同时运行时，会不会有问题？
+
+### Reclamation Problem
+
+稍加分析可以得知，当 `find` 操作和 `erase` 操作被多个线程同时执行时，`erase` 操作可能会意外地删除 `find` 操作正在访问的节点，造成数据竞争和 use-after-free 。造成这个问题的根本原因在于 `erase` 操作并不知道其他线程正在访问某节点这一信息，盲目地删除了其他线程正在访问的节点。这个问题在无锁数据结构中被称为 **reclamation problem** 。
+
+如何解决 reclamation problem ？既然删除节点的线程不知道节点正在被使用，那就让节点的使用者通过某种办法向删除节点的线程说明”这个节点我正在使用，暂时不要删除它“这一信息。经典的解决方案就是引用计数。我们可以把节点之间的指针链接全部换为 `std::shared_ptr` 来利用引用计数机制：
+
+```cpp
+class LocklessMultiset {
+public:
+  void insert(int value);
+  bool erase(int value) noexcept;
+  bool find(int value) const noexcept;
+
+private:
+  struct Node {
+    Node(std::shared_ptr<Node> next, int value) noexcept
+      : next{std::move(next)}, value{value} {}
+
+    std::atomic<std::shared_ptr<Node>> next;
+    int value;
+  };
+
+  std::atomic<std::shared_ptr<Node>> _head;
+};
+
+void LocklessMultiset::insert(int value) {
+  std::shared_ptr<Node> old_head = _head.load(std::memory_order_relaxed);
+  std::shared_ptr<Node> node
+    = std::make_shared<Node>(std::move(old_head), value);
+  _head.store(std::move(node), std::memory_order_release);
+}
+
+bool LocklessMultiset::erase(int value) noexcept {
+  std::atomic<std::shared_ptr<Node>>* pos = &_head;
+  std::shared_ptr<Node> node;
+
+  while ((node = pos->load(std::memory_order_acquire))) {
+    if (node->value == value) {
+      std::shared_ptr<Node> node_next
+        = node->next.load(std::memory_order_relaxed);
+      pos->store(std::move(node_next), std::memory_order_relaxed);
+      break;
+    }
+    pos = &node->next;
+  }
+
+  return node != nullptr;
+}
+
+bool LocklessMultiset::find(int value) const noexcept {
+  for (
+    std::shared_ptr<Node> node = _head.load(std::memory_order_acquire);
+    node;
+    node = node->next.load(std::memory_order_acquire)
+  ) {
+    if (node->value == value) {
+      return true;
+    }
+  }
+  return false;
+}
+```
+
+这样就解决了 reclamation problem 。但是，由于 `std::shared_ptr` 在内部需要维护引用计数，因此 `std::atomic<std::shared_ptr>` 是无法做到无锁的，其 `load` 和 `store` 操作在内部都需要某种形式的锁（通常是自旋锁）来保证其原子性。因此，读写一个 `std::atomic<T*>` 往往只需要一条 `load` 或 `store` 指令即可完成，但读写一个 `std::atomic<std::shared_ptr<T>>` 往往需要数十条指令才能完成。具体的比较可以参考 [godbolt 上的实例](https://godbolt.org/#g:!((g:!((g:!((h:codeEditor,i:(filename:'1',fontScale:18,fontUsePx:'0',j:1,lang:c%2B%2B,selection:(endColumn:1,endLineNumber:11,positionColumn:1,positionLineNumber:11,selectionStartColumn:1,selectionStartLineNumber:11,startColumn:1,startLineNumber:11),source:'%23include+%3Catomic%3E%0A%23include+%3Cmemory%3E%0A%0Aint*+load_ptr(std::atomic%3Cint*%3E%26+x)+%7B%0A++return+x.load(std::memory_order_relaxed)%3B%0A%7D%0A%0Astd::shared_ptr%3Cint%3E+load_shared_ptr(std::atomic%3Cstd::shared_ptr%3Cint%3E%3E%26+x)+%7B%0A++return+x.load(std::memory_order_relaxed)%3B%0A%7D%0A'),l:'5',n:'0',o:'C%2B%2B+source+%231',t:'0')),k:47.647886483346,l:'4',n:'0',o:'',s:0,t:'0'),(g:!((h:compiler,i:(compiler:g131,deviceViewOpen:'1',filters:(b:'0',binary:'1',binaryObject:'1',commentOnly:'0',debugCalls:'1',demangle:'0',directives:'0',execute:'1',intel:'0',libraryCode:'0',trim:'1'),flagsViewOpen:'1',fontScale:18,fontUsePx:'0',j:1,lang:c%2B%2B,libs:!(),options:'-O2+-std%3Dc%2B%2B23',overrides:!(),selection:(endColumn:54,endLineNumber:4,positionColumn:54,positionLineNumber:4,selectionStartColumn:54,selectionStartLineNumber:4,startColumn:54,startLineNumber:4),source:1),l:'5',n:'0',o:'+x86-64+gcc+13.1+(Editor+%231)',t:'0')),k:52.352113516654,l:'4',m:100,n:'0',o:'',s:0,t:'0')),l:'2',n:'0',o:'',t:'0')),version:4)。
+
+有没有更加高效的解决方案呢？有的，那就是 hazard pointer 。
+
+## Hazard Pointer
+
+Hazard pointer 解决 reclamation problem 的思路与自动垃圾回收非常类似。我们将“删除节点”这一关键操作从 `erase` 操作中剥离出来形成一个单独的“删除器”组件，其专门负责删除那些已经被 `erase` 操作从链表上摘下且不会再被访问的链表节点。当 `find` 操作需要访问某个节点时，`find` 操作需要首先向“删除器”申请一个指向该节点的特殊指针，该特殊指针用于向“删除器”表示该节点正在被使用，不能被立即删除。当 `erase` 操作需要删除某个节点时，`erase` 操作不能直接删除这个节点，而是要通知“删除器”这个节点可以被删除。“删除器”会在确保没有任何人持有这个节点的引用后才会删除这个节点。上述的这个由 `find` 操作向“删除器”申请的特殊指针就叫 hazard pointer 。
+
+利用 hazard pointer 方案解决 reclamation problem，对数据结构唯一的侵入式修改在于需要让链表节点直接或间接继承自 `std::hazard_pointer_obj_base` ：
+
+```cpp
+class LocklessMultiset {
+public:
+  void insert(int value);
+  bool erase(int value) noexcept;
+  bool find(int value) const noexcept;
+
+private:
+  struct Node : std::hazard_pointer_obj_base<Node> {
+    std::atomic<Node*> next;
+    int value;
+  };
+
+  std::atomic<Node*> _head;
+};
+```
+
+当 `erase` 操作需要删除某个节点时，`erase` 操作需要调用由 `std::hazard_pointer_obj_base` 定义的 `retire` 成员函数，该成员函数向“删除器”表示当前节点可以被删除：
+
+```cpp
+bool LocklessMultiset::erase(int value) noexcept {
+  std::atomic<Node*>* pos = &_head;
+  Node* node;
+
+  while ((node = pos->load(std::memory_order_acquire))) {
+    if (node->value == value) {
+      Node* node_next = node->next.load(std::memory_order_relaxed);
+      pos->store(node_next, std::memory_order_relaxed);
+      node->retire();  // Important!
+      break;
+    }
+    pos = &node->next;
+  }
+
+  return node != nullptr;
+}
+```
+
+当 `find` 操作需要访问某个节点时，`find` 操作需要首先向“删除器”申请一个指向该节点的 hazard pointer ，然后才能访问这个节点：
+
+```cpp
+bool LocklessMultiset::find(int value) const noexcept {
+  std::hazard_pointer hp = std::make_hazard_pointer();
+  for (
+    // Acquire a hazard pointer to *_head
+    Node* node = hp.protect(_head);
+    node;
+    // Acquire a hazard pointer to *node->next and release the existing hazard
+    // pointer
+    node = hp.protect(node->next)
+  ) {
+    if (node->value == value) {
+      return true;
+    }
+  }
+  return false;
+}
+```
+
+这里需要简单介绍一下 C++26 中 hazard pointer 的相关 API 设计。`std::hazard_pointer` 是 hazard pointer 的容器（而不是 hazard pointer 本身）。`std::hazard_pointer` 提供了一个 `protect` 成员函数，该函数接收一个 `std::atomic<T*>` 对象作为参数。`protect` 函数会以 acquire 内存序加载参数中的 T 对象指针，向“删除器”申请一个指向同一个 T 对象的 hazard pointer，并将这个 hazard pointer 保存在当前的 `std::hazard_pointer` 对象中。如果当前的 `std::hazard_pointer` 对象中已经包含一个 hazard pointer，那么 `protect` 会首先将这个 hazard pointer 释放。
+
+了解了这些基本 API 的含义，上述的 `find` 函数实现就很容易理解了。`find` 函数中的 `for` 循环始终维持一个循环不变式，即在每一轮循环中，在 `hp` 中总有一个有效的 hazard pointer 指向 `node` 所指向的对象。这样，在循环体内访问 `node` 所指向的对象时就总能保证该对象是有效的。
+
+## 典型实现
+
+Facebook 的 folly 库提供了 hazard pointer 的一个[参考实现](https://github.com/facebook/folly/blob/main/folly/synchronization/Hazptr.h)。本节以这个实现作为参考，结合 C++26 hazard pointer 的提案，简要介绍未来进入 C++ 标准的可能的 hazard pointer 内部实现原理。需要注意到的是，P2530 提案所提出的 hazard pointer 并不包含 folly 库的 hazard pointer 的全部功能，而是只包含后者的一些基础核心功能。
+
+当标准库包含 hazard pointer 后，每个应用程序在运行时在全局会有唯一的一个“删除器”（folly 中将其称为 domain）。在线程通过 `protect` 等 hazard pointer 相关函数申请一个 hazard pointer 时，标准库会将这个申请转发给这个全局唯一的“删除器”，并由这个“删除器”负责分配需要的 hazard pointer 并做好记录。当 hazard pointer 的生命周期结束时，标准库也会将这一事件通知“删除器”，“删除器”会释放 hazard pointer 自身所占有的任何资源并做好记录。在执行“垃圾回收”时，“删除器”会根据其记录的 hazard pointer 情况决定是否需要释放某个 `std::hazard_pointer_base_obj` 对象。
+
+在某一时刻，“删除器”会对程序中的 `std::hazard_pointer_obj_base` 对象进行“垃圾回收”。这里存在两个问题，即：1) “垃圾回收”在什么时机开始；2) “删除器”如何得知哪些对象是“垃圾回收”的潜在目标。
+
+对于第一个问题，P2530 提案并没有规定任何有关触发“垃圾回收”的时机的内容，也没有规定任何的 API 可以对“垃圾回收”的时机进行干预。因此“垃圾回收”理论上可能在任何时间触发，也可能永远不会触发。Folly 的参考实现中则规定了如下一些触发“垃圾回收”的时机：
+
+- 当未删除的 `std::hazard_pointer_obj_base` 达到一定量时；
+- 当累计结束生命周期的 hazard pointer 的数量达到一定量时；
+- 当足够长的一段没有触发“垃圾回收”的时间流逝后；
+- 当用户手工调用“垃圾回收”时。
+
+对于第二个问题，目前 folly 的大体实现方法是在 `retire` 函数内将当前可以释放的 `std::hazard_pointer_obj_base` 对象添加到“删除器”内部维护的一个列表中。当垃圾回收发生时，“删除器”会遍历这个列表并删除可以安全地删除的对象。
+
+## 性能评估
+
+说了这么多，hazard pointer 到底还是为了性能而设计的，那么其性能相比于前文介绍的引用计数究竟如何呢？本节做了一个简单而粗糙的 benchmark 来评估这一点。这些 benchmark 的测试目标分别为基于引用计数实现的 multiset（记为 multiset-rc）、基于 hazard pointer 实现的 multiset（记为 multiset-hazptr）以及基于不支持并发访问的普通链表实现的 multiset（记为 multiset-baseline）。
+
+首先我们评估 `insert` 操作的耗时，分别对三个实现测试其向一个空的 multiset 中插入不同数量元素的总耗时，结果如下：
+
+| 插入元素数量 | multiset-rc | multiset-hazptr | multiset-baseline |
+|---|---|---|---|
+| 1000 | 30606 ns (+338.04%) | 26246 ns (+275.64%) | 6987 ns |
+| 10000 | 317461 ns (+361.23%) | 198727 ns (+188.73%) | 68829 ns |
+| 100000 | 3691551 ns (+157.70%) | 2204813 ns (+53.92%) | 1432474 ns |
+
+接下来我们评估 `erase` 操作的耗时，分别对三个实现测试其将一个初始包含若干元素的 multiset 清空所需的总耗时，每次 `erase` 操作都恰好删除链表中的第一个节点，结果如下：
+
+| 初始元素数量 | multiset-rc | multiset-hazptr | multiset-baseline |
+|---|---|---|---|
+| 1000 | 36240 ns (+610.17%) | 35752 ns (+600.61%) | 5103 ns |
+| 10000 | 366215 ns (+765.10%) | 340864 ns (+705.21%) | 42332 ns |
+| 100000 | 3763030 ns (+768.67%) | 3636911 ns (+739.55%) | 433196 ns |
+
+接下来我们评估 `find` 操作的耗时，分别对三个实现测试在不同的并发数量下在一个包含 100 个元素的 multiset 上单个线程执行 10000 次 `find` 操作的总耗时，结果如下：
+
+| 并发线程数量 | multiset-rc | multiset-hazptr | multiset-baseline |
+|---|---|---|---|
+| 1 | 8422114 ns (+1573.74%) | 596028 ns (+18.44%) | 503238 ns |
+| 2 | 12690320 ns (+2161.39%) | 561173 ns | - |
+| 3 | 20716575 ns (+3504.51%) | 574741 ns | - |
+| 5 | 32184116 ns (+5529.12%) | 571743 ns | - |
+| 10 | 61722107 ns (+9375.77%) | 651368 ns | - |
+
+最后我们模拟一个真实的应用场景。使用至少两个线程，其中一个线程（写线程）执行 10000 次 `insert` 或 `erase` 操作，剩余的线程（读线程）分别执行 10000 次 `find` 操作，并分别统计两类线程的单个线程总执行时间，结果如下：
+
+| 读线程数量 | multiset-rc | multiset-hazptr
+|---|---|---|
+| 1 | 写：157974285 ns（+652.87%） <br /> 读：157957527 ns（+652.62%） | 写：20983000 ns <br /> 读：20987586 ns
+| 2 | 写：182186961 ns（+806.37%） <br /> 读：182508512 ns（+808.25%） | 写：20100727 ns <br /> 读：20094509 ns
+| 3 | 写：193384358 ns（+771.33%） <br /> 读：194611975 ns（+778.22%） | 写：22194111 ns <br /> 读：22159884 ns
+| 5 | 写：171761253 ns（+906.72%） <br /> 读：174285522 ns（+925.98%） | 写：17061476 ns <br /> 读：16987282 ns
+| 10 | 写：233055244 ns（+854.45%） <br /> 读：242915395 ns（+915.87%） | 写：24417775 ns <br /> 读：23912041 ns
+
+用于性能评估的代码可以在 [Github Gist](https://gist.github.com/Lancern/d1403d71e8256e166c3cabb1f7b5e194) 上找到。
+
+## 总结
+
+本文对 hazard pointer 的机制进行了简单介绍，并对其性能做了简单的 benchmark 。Hazard pointer 的设计思想借鉴于自动垃圾回收，可以以较高的性能解决并发数据结构中的 reclamation problem 问题，且拓展性比传统方法更强。
