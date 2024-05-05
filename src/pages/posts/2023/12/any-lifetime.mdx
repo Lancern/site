@@ -1,0 +1,164 @@
+---
+layout: "@layouts/PostLayout.astro"
+title: Enable Dynamic Typing for Non-Owned Types
+date: 2023-12-05
+category: Rust
+tags: ["rust"]
+---
+
+`std::any::Any` is an object-safe trait that can be used for implementing dynamic typing. It provides a series of downcast functions that allow you to cast from `&dyn Any` to `&T` with runtime type enforcement. It can be really neat in certain scenarios, for example, when you want to implement heterogeneous containers (i.e. container that can hold different types of objects).
+
+However, `std::any::Any` has a limitation: it is only implemented for `'static` types (or owned types). See its definition:
+
+```rust
+pub trait Any: 'static {
+    // Required method
+    fn type_id(&self) -> TypeId;
+}
+```
+
+The `: 'static` bound effectively means that any type which holds a non-`'static` reference to other objects cannot implement `Any`. These types thus cannot benefit from dynamic typing. The reason is simple and intuitive: when you coerce a `T` into a `dyn Any`, not only the type `T` is elided, but also all lifetimes associated with `T` are elided. The type system can no longer track those lifetimes across the coercion; so this coercion should not be allowed.
+
+Is there a way that enables dynamic typing for such types? As discussed above, in general, such approaches will result in lifetime violations because lifetimes are also elided along the type information during coercion. So the key is to keep the lifetime while erasing the type. Let's demonstrate this by implementing a simple type-erased smart pointer `TypeErasedBox`, which is conceptually similar to `Box<dyn Any>`, but it can additionally hold objects bounded by a given lifetime:
+
+```rust
+pub struct TypeErasedBox<'a> {
+    ptr: *mut u8,
+    ty: TypeId,
+    layout: Layout,
+    inplace_dropper: Box<dyn Fn(*mut u8)>,
+    _ref: PhantomData<&'a ()>,
+}
+impl<'a> TypeErasedBox<'a> {
+    pub fn new<T: 'a>(value: T) -> Self {
+        todo!()
+    }
+    pub fn get<T: 'a>(&self) -> Option<&T> {
+        todo!()
+    }
+}
+impl<'a> Drop for TypeErasedBox<'a> {
+    fn drop(&mut self) {
+        todo!()
+    }
+}
+```
+
+The `'a` lifetime parameter is the lifetime bound of the object owned by the smart pointer. When creating a `TypeErasedBox`, objects of any types bounded by `'a` can be put into the smart pointer. Later, users can extract the object through the `get` function which does runtime type checking. The data fields should be self-explanatory:
+
+- `ptr` is a pointer to a heap-allocated memory chunk that contains the owned object.
+- `ty` is a dynamic type ID that identifies the type of the owned object at runtime. This field is crucial for runtime type checking.
+- `layout` gives the memory layout of the contained object. It is useful during dropping when the heap-allocated memory chunk needs to be released.
+- `inplace_dropper` points to a function that drops the contained object during dropping.
+
+We may implement `new` as follows:
+
+```rust
+pub fn new<T: 'a>(value: T) -> Self {
+    let layout = Layout::for_value(&value);
+    let ptr = unsafe { std::alloc::alloc(layout) };
+
+    // We don't really handle allocation failure for simplicity here.
+    assert!(!ptr.is_null());
+
+    unsafe {
+        std::ptr::write(ptr as *mut T, value);
+    }
+
+    Self {
+        ptr,
+        ty: TypeId::of::<T>(),
+        layout,
+        inplace_dropper: Box::new(|ptr| unsafe {
+            std::ptr::drop_in_place(ptr as *mut T);
+        }),
+        _ref: PhantomData::default(),
+    }
+}
+```
+
+Unfortunately, the above code won't compile. Similar to Any, only owned types can have corresponding `TypeIds` at runtime. You cannot get a `TypeId` for a non-owned type. See the definition of `TypeId::of`:
+
+```rust
+pub fn of<T>() -> TypeId
+where
+    T: 'static + ?Sized;
+```
+
+The solution to overcome this issue is to introduce a "tag type" for the purpose of runtime type checking. Let's say we want to put objects of the following type into a `TypeErasedBox`:
+
+```rust
+pub struct Ref<'a>(&'a i32);
+```
+
+`Ref` can be regarded as a family of types parameterized by a lifetime `'a`. We introduce a tag type `RefTag` to identify this family of types:
+
+```rust
+pub struct RefTag;
+```
+
+Within a `TypeErasedBox` that contains a `Ref<'a>` object, the stored type identity ty should be the type identity of `RefTag`. This correspondence between an owned tag type `RefTag` and its represented family of types `Ref<'a>` can be expressed via a trait:
+
+```rust
+pub trait ErasableTypeFamily: 'static {
+    type Member<'a>;
+}
+impl ErasableTypeFamily for RefTag {
+    type Member<'a> = Ref<'a>;
+}
+```
+
+Based on the solution above, we can implement `TypeErasedBox::new` and `TypeErasedBox::get` now:
+
+```rust
+pub fn new<T: ErasableTypeFamily>(value: T::Member<'a>) -> Self {
+    let layout = Layout::for_value(&value);
+    let ptr = unsafe { std::alloc::alloc(layout) };
+
+    // We don't really handle allocation failure for simplicity here.
+    assert!(!ptr.is_null());
+
+    unsafe {
+        std::ptr::write(ptr as *mut T::Member<'a>, value);
+    }
+
+    Self {
+        ptr,
+        ty: TypeId::of::<T>(),
+        layout,
+        inplace_dropper: Box::new(|ptr| unsafe {
+            std::ptr::drop_in_place(ptr as *mut T::Member<'a>);
+        }),
+        _ref: PhantomData::default(),
+    }
+}
+
+pub fn get<T: ErasableTypeFamily>(&self) -> Option<&T::Member<'a>> {
+    if self.ty != TypeId::of::<T>() {
+        return None;
+    }
+
+    let value_ref = unsafe {
+        (self.ptr as *mut T::Member<'a>).as_ref().unwrap()
+    };
+    Some(value_ref)
+}
+```
+
+Finally, to make the implementation complete, here is the implementation for the `Drop` trait:
+
+```rust
+impl<'a> Drop for TypeErasedBox<'a> {
+    fn drop(&mut self) {
+        (self.inplace_dropper)(self.ptr);
+        unsafe {
+            std::alloc::dealloc(self.ptr, self.layout);
+        }
+    }
+}
+```
+
+Here are some key takeaways from this short write-up:
+
+- `std::any::Any` is only implemented for owned types (i.e. types bounded by `'static`). To safely enable dynamic typing for non-owned types, lifetime bounds on these types cannot be elided.
+- `TypeId` can be used to identify the dynamic type of an object at runtime. However, it is only available for owned types. Thus, we need to introduce a "tag type" to identify a family of lifetime-parameterized types, and uses the `TypeId` for tag types to do the type check at runtime.
