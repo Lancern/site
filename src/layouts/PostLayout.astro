@@ -5,17 +5,12 @@ import BaseLayout from "@layouts/BaseLayout.astro";
 import BookmarkIcon from "@components/icon/BookmarkIcon.astro";
 import CalendarIcon from "@components/icon/CalendarIcon.astro";
 import CopyrightIcon from "@components/icon/CopyrightIcon.astro";
+import DateText from "@components/DateText.astro";
 import TextWithIcon from "@components/TextWithIcon.astro";
 
 import type { PostFrontmatter } from "@scripts/posts";
 
 const frontmatter: PostFrontmatter = Astro.props.frontmatter;
-
-let date = frontmatter.date;
-if (typeof date === "string") {
-  date = new Date(date);
-}
-let dateStr = date.toLocaleDateString();
 ---
 
 <BaseLayout title={frontmatter.title + " - Lancern's Home"}>
@@ -26,7 +21,7 @@ let dateStr = date.toLocaleDateString();
         <div class="post-meta-item post-meta-date">
           <TextWithIcon>
             <CalendarIcon size="1.2em" slot="icon" />
-            {dateStr}
+            <DateText date={frontmatter.date} />
           </TextWithIcon>
         </div>
         <div class="post-meta-item post-meta-category">

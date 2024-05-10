@@ -1,0 +1,54 @@
+---
+import BookmarkIcon from "@components/icon/BookmarkIcon.astro";
+import CalendarIcon from "@components/icon/CalendarIcon.astro";
+import DateText from "@components/DateText.astro";
+import TextWithIcon from "@components/TextWithIcon.astro";
+import type { PostFrontmatter } from "@scripts/posts";
+
+interface Props {
+  frontmatter: PostFrontmatter;
+  url: string;
+}
+
+const { frontmatter, url } = Astro.props;
+---
+
+<div>
+  <a class="title-line" href={url}>{frontmatter.title}</a>
+  <div class="meta-line">
+    <div class="post-meta-item post-meta-date">
+      <TextWithIcon>
+        <CalendarIcon size="1.2em" slot="icon" />
+        <DateText date={frontmatter.date} />
+      </TextWithIcon>
+    </div>
+    <div class="post-meta-item post-meta-category">
+      <TextWithIcon>
+        <BookmarkIcon size="1.2em" slot="icon" />
+        {frontmatter.category}
+      </TextWithIcon>
+    </div>
+  </div>
+</div>
+
+<style>
+  .title-line {
+    display: block;
+    margin-bottom: 0.4em;
+    text-decoration: none;
+    color: black;
+    font-size: 1.3em;
+    font-weight: bold;
+  }
+
+  .title-line:hover {
+    text-decoration: underline;
+  }
+
+  .meta-line {
+    display: flex;
+    column-gap: 2em;
+    color: #646464;
+    font-size: 0.9em;
+  }
+</style>

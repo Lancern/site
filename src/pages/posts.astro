@@ -1,7 +1,32 @@
 ---
 import BaseLayout from "@layouts/BaseLayout.astro";
+import PostList, { type PostInfo } from "@components/PostList.astro";
+import type { PostFrontmatter } from "@scripts/posts";
+import type { MDXInstance, MarkdownInstance } from "astro";
+
+type GlobInstance = MarkdownInstance<PostFrontmatter> | MDXInstance<PostFrontmatter>;
+
+const allPosts = await Astro.glob<GlobInstance>("../pages/posts/**/*.{md,mdx}");
+
+// Filter out the most recent 10 published posts to be displayed on this page.
+const allPublishedPosts = allPosts.filter((post) => !post.frontmatter.draft);
+allPublishedPosts.sort((lhs, rhs) => {
+  let lhsDate = lhs.frontmatter.date;
+  let rhsDate = rhs.frontmatter.date;
+  if (typeof lhsDate === "string") {
+    lhsDate = new Date(lhsDate);
+  }
+  if (typeof rhsDate === "string") {
+    rhsDate = new Date(rhsDate);
+  }
+
+  // Sort in date descending order.
+  return rhsDate.valueOf() - lhsDate.valueOf();
+});
+
+const posts = allPublishedPosts.slice(0, 10) as PostInfo[];
 ---
 
 <BaseLayout title="Posts - Lancern's Home">
-  <h1>Posts</h1>
+  <PostList posts={posts} />
 </BaseLayout>

@@ -164,7 +164,7 @@ bool LocklessMultiset::find(int value) const noexcept {
 }
 ```
 
-这样就解决了 reclamation problem 。但是，由于 `std::shared_ptr` 在内部需要维护引用计数，因此 `std::atomic<std::shared_ptr>` 是无法做到无锁的，其 `load` 和 `store` 操作在内部都需要某种形式的锁（通常是自旋锁）来保证其原子性。因此，读写一个 `std::atomic<T*>` 往往只需要一条 `load` 或 `store` 指令即可完成，但读写一个 `std::atomic<std::shared_ptr<T>>` 往往需要数十条指令才能完成。具体的比较可以参考 [godbolt 上的实例](https://godbolt.org/#g:!((g:!((g:!((h:codeEditor,i:(filename:'1',fontScale:18,fontUsePx:'0',j:1,lang:c%2B%2B,selection:(endColumn:1,endLineNumber:11,positionColumn:1,positionLineNumber:11,selectionStartColumn:1,selectionStartLineNumber:11,startColumn:1,startLineNumber:11),source:'%23include+%3Catomic%3E%0A%23include+%3Cmemory%3E%0A%0Aint*+load_ptr(std::atomic%3Cint*%3E%26+x)+%7B%0A++return+x.load(std::memory_order_relaxed)%3B%0A%7D%0A%0Astd::shared_ptr%3Cint%3E+load_shared_ptr(std::atomic%3Cstd::shared_ptr%3Cint%3E%3E%26+x)+%7B%0A++return+x.load(std::memory_order_relaxed)%3B%0A%7D%0A'),l:'5',n:'0',o:'C%2B%2B+source+%231',t:'0')),k:47.647886483346,l:'4',n:'0',o:'',s:0,t:'0'),(g:!((h:compiler,i:(compiler:g131,deviceViewOpen:'1',filters:(b:'0',binary:'1',binaryObject:'1',commentOnly:'0',debugCalls:'1',demangle:'0',directives:'0',execute:'1',intel:'0',libraryCode:'0',trim:'1'),flagsViewOpen:'1',fontScale:18,fontUsePx:'0',j:1,lang:c%2B%2B,libs:!(),options:'-O2+-std%3Dc%2B%2B23',overrides:!(),selection:(endColumn:54,endLineNumber:4,positionColumn:54,positionLineNumber:4,selectionStartColumn:54,selectionStartLineNumber:4,startColumn:54,startLineNumber:4),source:1),l:'5',n:'0',o:'+x86-64+gcc+13.1+(Editor+%231)',t:'0')),k:52.352113516654,l:'4',m:100,n:'0',o:'',s:0,t:'0')),l:'2',n:'0',o:'',t:'0')),version:4)。
+这样就解决了 reclamation problem 。但是，由于 `std::shared_ptr` 在内部需要维护引用计数，因此 `std::atomic<std::shared_ptr>` 是无法做到无锁的，其 `load` 和 `store` 操作在内部都需要某种形式的锁（通常是自旋锁）来保证其原子性。因此，读写一个 `std::atomic<T*>` 往往只需要一条 `load` 或 `store` 指令即可完成，但读写一个 `std::atomic<std::shared_ptr<T>>` 往往需要数十条指令才能完成。具体的比较可以参考 [godbolt 上的实例](<https://godbolt.org/#g:!((g:!((g:!((h:codeEditor,i:(filename:'1',fontScale:18,fontUsePx:'0',j:1,lang:c%2B%2B,selection:(endColumn:1,endLineNumber:11,positionColumn:1,positionLineNumber:11,selectionStartColumn:1,selectionStartLineNumber:11,startColumn:1,startLineNumber:11),source:'%23include+%3Catomic%3E%0A%23include+%3Cmemory%3E%0A%0Aint*+load_ptr(std::atomic%3Cint*%3E%26+x)+%7B%0A++return+x.load(std::memory_order_relaxed)%3B%0A%7D%0A%0Astd::shared_ptr%3Cint%3E+load_shared_ptr(std::atomic%3Cstd::shared_ptr%3Cint%3E%3E%26+x)+%7B%0A++return+x.load(std::memory_order_relaxed)%3B%0A%7D%0A'),l:'5',n:'0',o:'C%2B%2B+source+%231',t:'0')),k:47.647886483346,l:'4',n:'0',o:'',s:0,t:'0'),(g:!((h:compiler,i:(compiler:g131,deviceViewOpen:'1',filters:(b:'0',binary:'1',binaryObject:'1',commentOnly:'0',debugCalls:'1',demangle:'0',directives:'0',execute:'1',intel:'0',libraryCode:'0',trim:'1'),flagsViewOpen:'1',fontScale:18,fontUsePx:'0',j:1,lang:c%2B%2B,libs:!(),options:'-O2+-std%3Dc%2B%2B23',overrides:!(),selection:(endColumn:54,endLineNumber:4,positionColumn:54,positionLineNumber:4,selectionStartColumn:54,selectionStartLineNumber:4,startColumn:54,startLineNumber:4),source:1),l:'5',n:'0',o:'+x86-64+gcc+13.1+(Editor+%231)',t:'0')),k:52.352113516654,l:'4',m:100,n:'0',o:'',s:0,t:'0')),l:'2',n:'0',o:'',t:'0')),version:4>)。
 
 有没有更加高效的解决方案呢？有的，那就是 hazard pointer 。
 
@@ -260,39 +260,39 @@ Facebook 的 folly 库提供了 hazard pointer 的一个[参考实现](https://g
 
 首先我们评估 `insert` 操作的耗时，分别对三个实现测试其向一个空的 multiset 中插入不同数量元素的总耗时，结果如下：
 
-| 插入元素数量 | multiset-rc | multiset-hazptr | multiset-baseline |
-|---|---|---|---|
-| 1000 | 30606 ns (+338.04%) | 26246 ns (+275.64%) | 6987 ns |
-| 10000 | 317461 ns (+361.23%) | 198727 ns (+188.73%) | 68829 ns |
-| 100000 | 3691551 ns (+157.70%) | 2204813 ns (+53.92%) | 1432474 ns |
+| 插入元素数量 | multiset-rc           | multiset-hazptr      | multiset-baseline |
+| ------------ | --------------------- | -------------------- | ----------------- |
+| 1000         | 30606 ns (+338.04%)   | 26246 ns (+275.64%)  | 6987 ns           |
+| 10000        | 317461 ns (+361.23%)  | 198727 ns (+188.73%) | 68829 ns          |
+| 100000       | 3691551 ns (+157.70%) | 2204813 ns (+53.92%) | 1432474 ns        |
 
 接下来我们评估 `erase` 操作的耗时，分别对三个实现测试其将一个初始包含若干元素的 multiset 清空所需的总耗时，每次 `erase` 操作都恰好删除链表中的第一个节点，结果如下：
 
-| 初始元素数量 | multiset-rc | multiset-hazptr | multiset-baseline |
-|---|---|---|---|
-| 1000 | 36240 ns (+610.17%) | 35752 ns (+600.61%) | 5103 ns |
-| 10000 | 366215 ns (+765.10%) | 340864 ns (+705.21%) | 42332 ns |
-| 100000 | 3763030 ns (+768.67%) | 3636911 ns (+739.55%) | 433196 ns |
+| 初始元素数量 | multiset-rc           | multiset-hazptr       | multiset-baseline |
+| ------------ | --------------------- | --------------------- | ----------------- |
+| 1000         | 36240 ns (+610.17%)   | 35752 ns (+600.61%)   | 5103 ns           |
+| 10000        | 366215 ns (+765.10%)  | 340864 ns (+705.21%)  | 42332 ns          |
+| 100000       | 3763030 ns (+768.67%) | 3636911 ns (+739.55%) | 433196 ns         |
 
 接下来我们评估 `find` 操作的耗时，分别对三个实现测试在不同的并发数量下在一个包含 100 个元素的 multiset 上单个线程执行 10000 次 `find` 操作的总耗时，结果如下：
 
-| 并发线程数量 | multiset-rc | multiset-hazptr | multiset-baseline |
-|---|---|---|---|
-| 1 | 8422114 ns (+1573.74%) | 596028 ns (+18.44%) | 503238 ns |
-| 2 | 12690320 ns (+2161.39%) | 561173 ns | - |
-| 3 | 20716575 ns (+3504.51%) | 574741 ns | - |
-| 5 | 32184116 ns (+5529.12%) | 571743 ns | - |
-| 10 | 61722107 ns (+9375.77%) | 651368 ns | - |
+| 并发线程数量 | multiset-rc             | multiset-hazptr     | multiset-baseline |
+| ------------ | ----------------------- | ------------------- | ----------------- |
+| 1            | 8422114 ns (+1573.74%)  | 596028 ns (+18.44%) | 503238 ns         |
+| 2            | 12690320 ns (+2161.39%) | 561173 ns           | -                 |
+| 3            | 20716575 ns (+3504.51%) | 574741 ns           | -                 |
+| 5            | 32184116 ns (+5529.12%) | 571743 ns           | -                 |
+| 10           | 61722107 ns (+9375.77%) | 651368 ns           | -                 |
 
 最后我们模拟一个真实的应用场景。使用至少两个线程，其中一个线程（写线程）执行 10000 次 `insert` 或 `erase` 操作，剩余的线程（读线程）分别执行 10000 次 `find` 操作，并分别统计两类线程的单个线程总执行时间，结果如下：
 
-| 读线程数量 | multiset-rc | multiset-hazptr
-|---|---|---|
-| 1 | 写：157974285 ns（+652.87%） <br /> 读：157957527 ns（+652.62%） | 写：20983000 ns <br /> 读：20987586 ns
-| 2 | 写：182186961 ns（+806.37%） <br /> 读：182508512 ns（+808.25%） | 写：20100727 ns <br /> 读：20094509 ns
-| 3 | 写：193384358 ns（+771.33%） <br /> 读：194611975 ns（+778.22%） | 写：22194111 ns <br /> 读：22159884 ns
-| 5 | 写：171761253 ns（+906.72%） <br /> 读：174285522 ns（+925.98%） | 写：17061476 ns <br /> 读：16987282 ns
-| 10 | 写：233055244 ns（+854.45%） <br /> 读：242915395 ns（+915.87%） | 写：24417775 ns <br /> 读：23912041 ns
+| 读线程数量 | multiset-rc                                                      | multiset-hazptr                        |
+| ---------- | ---------------------------------------------------------------- | -------------------------------------- |
+| 1          | 写：157974285 ns（+652.87%） <br /> 读：157957527 ns（+652.62%） | 写：20983000 ns <br /> 读：20987586 ns |
+| 2          | 写：182186961 ns（+806.37%） <br /> 读：182508512 ns（+808.25%） | 写：20100727 ns <br /> 读：20094509 ns |
+| 3          | 写：193384358 ns（+771.33%） <br /> 读：194611975 ns（+778.22%） | 写：22194111 ns <br /> 读：22159884 ns |
+| 5          | 写：171761253 ns（+906.72%） <br /> 读：174285522 ns（+925.98%） | 写：17061476 ns <br /> 读：16987282 ns |
+| 10         | 写：233055244 ns（+854.45%） <br /> 读：242915395 ns（+915.87%） | 写：24417775 ns <br /> 读：23912041 ns |
 
 用于性能评估的代码可以在 [Github Gist](https://gist.github.com/Lancern/d1403d71e8256e166c3cabb1f7b5e194) 上找到。
 

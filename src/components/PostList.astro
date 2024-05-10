@@ -1,0 +1,39 @@
+---
+import PostListItem from "@components/PostListItem.astro";
+import type { PostFrontmatter } from "@scripts/posts";
+
+export interface PostInfo {
+  frontmatter: PostFrontmatter;
+  url: string;
+}
+
+interface Props {
+  posts: PostInfo[];
+}
+
+const { posts } = Astro.props;
+---
+
+<div class="post-list">
+  {
+    posts.map((post) => (
+      <div class="post-list-item">
+        <PostListItem frontmatter={post.frontmatter} url={post.url!} />
+      </div>
+    ))
+  }
+</div>
+
+<style>
+  .post-list .post-list-item {
+    margin: 32px 0;
+  }
+
+  .post-list .post-list-item:first-child {
+    margin-top: 0;
+  }
+
+  .post-list .post-list-item:last-child {
+    margin-bottom: 0;
+  }
+</style>
