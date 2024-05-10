@@ -9,6 +9,13 @@
   margin: 32px 0;
 }
 
+.post-body hr {
+  border: 0;
+  height: 1px;
+  background-color: #cacaca;
+  margin: 64px 20%;
+}
+
 .post-body code {
   font-size: 0.9em;
   padding: 0.2em 0.4em;

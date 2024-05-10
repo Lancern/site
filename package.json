@@ -17,7 +17,9 @@
   },
   "dependencies": {
     "@astrojs/mdx": "^2.3.1",
-    "astro": "^4.7.1"
+    "astro": "^4.7.1",
+    "rehype-mathjax": "^6.0.0",
+    "remark-math": "^6.0.0"
   },
   "devDependencies": {
     "@astrojs/check": "^0.5.10",

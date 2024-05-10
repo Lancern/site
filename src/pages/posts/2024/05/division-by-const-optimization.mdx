@@ -1,0 +1,299 @@
+---
+layout: "@layouts/PostLayout.astro"
+title: 整数除法在除数为常量时的优化原理
+date: 2024-05-09
+category: "Compiler"
+tags: ["compiler", "optimization"]
+---
+
+> 搬运自我的知乎回答：[编译器是如何实现 32 位整型的常量整数除法优化的？](https://www.zhihu.com/question/647564604/answer/3493012678)
+
+题主说的应该是将除以编译期常量的除法变换为一次乘法和一堆加减法和按位右移的优化吧：
+
+```cpp
+unsigned test(unsigned x) {
+  return x / 10;
+}
+```
+
+被编译器优化为：
+
+```asm
+test:
+  mov   eax, edi
+  mov   edx, 3435973837
+  imul  rax, rdx
+  shr   rax, 35
+  ret
+```
+
+这是一个很经典的优化，在 1994 年的论文 [Division by Invariant Integers using Multiplication](https://gmplib.org/~tege/divcnst-pldi94.pdf) 中提出了明确的构造方法及其正确性证明。
+
+现代 CPU 内部的硬件除法器通常延迟很高。以 x86 架构为例，[uops.info](https://uops.info) 上给出了 Alder Lake 架构下 32 位整数除法指令 idiv 的延迟为 10-15 个周期左右，相比之下 32 位整数乘法指令 imul 的延迟为 3-4 个周期。因此，将除法操作替换为若干其他算术运算操作是有效的优化。
+
+## 无符号整数除法
+
+记被除数为 $n$，除数为 $d$，且 $d$ 是一个常数。我们试图计算 $\left\lfloor n / d \right\rfloor$。
+
+这个优化的基本原理其实非常简单。我们知道，在计算整数除法时，如果除数是 2 的整数次幂
+，那么这个除法操作可以被一个非常高效的按位右移操作取代。因此我们可以考虑把除数换为 2 的某个整数次幂，并将原来的除法操作替换为一次乘法和一个按位右移操作：
+
+$$
+\left\lfloor \frac{n}{d} \right\rfloor = \left\lfloor \frac{n \cdot \left( 2^s / d \right) }{2^s} \right\rfloor
+$$
+
+进一步，这里虽然 $2^s / d$ 不是一个整数，但是由于最后我们会把乘法的结果按位右移 $s$ 位得到原除法操作的结果，因此我们可以尝试用一个与之足够接近的整数 $m$ 近似替代使得不精确的乘法只会影响乘法结果的低 $s$ 位：
+
+$$
+\left\lfloor \frac{n}{d} \right\rfloor = \left\lfloor \frac{n \cdot \left( 2^s / d \right) }{2^s} \right\rfloor \approx \left\lfloor \frac{n \cdot m}{2^s} \right\rfloor
+$$
+
+因此，只要能找到这样一组 $\left(s, m\right)$ 使得上式中的约等号成为等号即可完成这一优化。
+
+假设被除数 $n$ 和除数 $d$ 都是 $N$ 位无符号整数，其数值范围为 $0 \le n,d < 2^N, d \ne 0$ 。前述论文中的定理 4.2 证明了，对于整数 $m$ 和 $l$ ，如果有：
+
+$$
+2^{N+l} \le m \cdot d \le 2^{N+l} + 2^l \tag{1}
+$$
+
+那么一定有：
+
+$$
+\left\lfloor \frac{n}{d} \right\rfloor = \left\lfloor \frac{n \cdot m }{2^{N+l}} \right\rfloor, 0 \le n,d < 2^N \tag{2}
+$$
+
+证明也不难，只需要证明
+
+$$
+0 \le \frac{n \cdot m}{2^{N+l}} - \left\lfloor \frac{n}{d} \right\rfloor < 1
+$$
+
+即可。感兴趣的读者可以在论文中找到具体证明细节。
+
+有了这个结论就很好构造了。根据条件 (1)，我们需要在区间 $\left[2^{N+l}, 2^{N+l}+2^l\right]$ 内找到一个 $d$ 的倍数 $m \cdot d$ 。这个区间的长度为 $2^\prime$ ，显然为了使区间内一定存在这样的倍数，我们可以令 $l = \left\lceil \log_2 d \right\rceil$ 。在确保区间内一定存在 $d$ 的倍数后，我们就可以很容易构造出来 $m = \left\lceil 2^{N+l} / d \right\rceil$ 。在构造出来 $m$ 和 $l$ 后，原无符号整数除法便可以被变换为一次无符号整数乘法操作 $n \cdot m$ 和一次按位逻辑右移操作 $\left(n \cdot m\right) \gg \left(N+l\right)$ 。
+
+从优化原理也不难看出，对于同一个优化前的除法操作，可能存在多种 $\left(m, l\right)$ 组合满足优化条件，因此不同的编译器可能会将同一个除法操作转换为不同的优化代码。本文接下来只介绍其中的几个具体优化实现方法。
+
+<hr />
+
+上面的理论优化方案在实际应用过程中会遇到问题。我们有：
+
+$$
+\begin{aligned} m
+&= \left\lceil 2^{N+l} / d \right\rceil = \left\lceil 2^{N+\left\lceil \log_2 d \right\rceil} / d \right\rceil \\
+&\ge 2^N \end{aligned}
+$$
+
+且当 $d$ 为 2 的整数次幂时取等号。这意味着计算 $n \cdot m$ 可能会发生溢出。当 $n$ 是一个很大的无符号 $N$ 位整数时，$n \cdot m$ 的计算结果可能会超出 $2N$ 位无符号整数的范围。
+
+因此，编译器一般会首先尝试令 $l = 0, 1, 2, \cdots, \left\lfloor \log_2 d \right\rfloor$ 并依次确认 (1) 中的区间内是否存在 $d$ 的倍数。如果存在，那么相应的 $m$ 可以被塞入一个 $N$ 位无符号整数中参与乘法运算。此时 $n \cdot m$ 的结果不会超出 $2N$ 位无符号整数的范围，能够直接通过 CPU 乘法指令进行计算。
+
+**实例**：对于以下函数 `test1`：
+
+```cpp
+unsigned test1(unsigned n) {
+  return n / 10;
+}
+```
+
+目前最新的 gcc 和 clang 编译器都把它优化为了：
+
+```cpp
+unsigned test1(unsigned n) {
+  // mov   ecx, $n
+  // mov   eax, 3435973837
+  // imul  rax, rcx
+  // shr   rax, 35
+  // ret
+  return (uint64_t)n * 3435973837 >> 35;
+}
+```
+
+这里 $N = 32$ ，根据上面的优化方法，当 $l = \left\lfloor \log_2 10 \right\rfloor = 3$ 时 (1) 中的区间为 $\left[2^{35}, 2^{35} + 8\right]$ ，这个区间内刚好存在一个 10 的倍数 34359738370 。因此 $N + l = 35$ ， $m = \left\lceil 2^{35} / 10 \right\rceil = 3435973837$ ，分别对应于优化后的代码中的两个魔数。
+
+<hr />
+
+如果对于所有 $l = 0, 1, 2, \cdots, \left\lfloor \log_2 d \right\rfloor$ 都没有在 (1) 中的区间内找到 $d$ 的倍数，但是 $d$ 是一个偶数，那么我们还可以进一步尝试将原除法 $\left\lfloor n / d \right\rfloor$ 约分。记 $d = 2^e \cdot d^\prime$ 且 $d^\prime$ 是一个奇数，那么有：
+
+$$
+\left\lfloor \frac{n}{d} \right\rfloor = \left\lfloor \frac{n}{2^e \cdot d^\prime} \right\rfloor = \left\lfloor \frac{\left\lfloor n / 2^e \right\rfloor}{d^\prime} \right\rfloor
+$$
+
+此时 $\left\lfloor n / 2^e \right\rfloor$ 和 $d^\prime$ 就成为新的被除数和除数，他们都是 $N^\prime = N - e$ 位无符号整数。并且由于除数变小了，我们也就更有可能可以在 (1) 中的区间内找到其倍数了。我们可以再按照上述的流程，依次令 $l^\prime = 0, 1, 2, \cdots, \left\lfloor \log_2 d^\prime \right\rfloor$ 并分别尝试为 $d^\prime$ 在区间 $\left[2^{N^\prime+l^\prime}, 2^{N^\prime+l^\prime} + 2^{l^\prime}\right]$ 内寻找倍数。如果成功找到了倍数，就可以计算相应的 $m = \left\lceil 2^{N^\prime + l^\prime} / d^\prime \right\rceil$ 并进行优化变换。
+
+**实例**：对于以下函数 `test2`：
+
+```cpp
+unsigned test2(unsigned n) {
+  return n / 42;
+}
+```
+
+目前最新的 clang 编译器把它优化为了：
+
+```cpp
+unsigned test2(unsigned n) {
+  // shr   $n
+  // imul  rax, rdi, 818089009
+  // shr   rax, 34
+  // ret
+  return (uint64_t)(n >> 1) * 818089009 >> 34;
+}
+```
+
+当 $l = 0, 1, 2, \cdots, \left\lfloor \log_2 d \right\rfloor$ 时 (1) 中的区间内均不存在 42 的倍数。但是 42 是一个偶数，因此 `n / 42` 可以被变换为 `(n >> 1) / 21` ，因此优化后的代码有一个将 `x` 逻辑右移 1 位的操作。新的除数为 $d^\prime = 21$ ，约分后的被除数和除数都是 $N^\prime = 31$ 位无符号整数。当 $l^\prime = 3 < \left\lceil \log_2 d^\prime \right\rceil$ 时，区间 $\left[2^{34}, 2^{34} + 8\right]$ 内刚好有一个 $d^\prime$ 的倍数 17179869189 。因此有 $N^\prime + l^\prime = 34$ ， $m^\prime = \left\lceil 2^{34} / 21 \right\rceil = 818089009$ ，分别对应于优化后代码中的另外两个魔数。与前一种情况相比，这种情况会多出一个按位逻辑右移操作。
+
+<hr />
+
+在尝试了上面所有办法后，如果 (1) 中的区间内仍然不存在 $d$ 的倍数，我们就只能令 $l = \left\lceil \log_2 d \right\rceil$ 。此时有：
+
+$$
+2^N < m = \left\lceil \frac{2^{N+\left\lceil \log_2 d \right\rceil}}{d} \right\rceil < 2^{N+1}
+$$
+
+为了解决 $n \cdot m$ 溢出的问题，我们令 $m = 2^N + m^\prime$ ，显然 $0 < m^\prime < 2^N$ ，并且有：
+
+$$
+\begin{aligned}
+\left\lfloor \frac{n}{d} \right\rfloor
+= \left\lfloor \frac{n \cdot m}{2^{N+l}} \right\rfloor
+&= \left\lfloor \frac{n \cdot \left(2^N + m^\prime\right)}{2^{N+l}} \right\rfloor \\
+&= \left\lfloor \frac{n \cdot 2^N + n \cdot m^\prime}{2^{N+l}} \right\rfloor \\
+&= \left\lfloor \frac{n + \left\lfloor \left(n \cdot m^\prime\right) / 2^N \right\rfloor}{2^l} \right\rfloor \\
+&= \left(n + \left(n \cdot m^\prime \gg N\right)\right) \gg l
+\end{aligned}
+$$
+
+这样就避免了乘法计算过程中的溢出。
+
+记 $k = n \cdot m^\prime \gg N$ ，那么有 $0 < k < 2^N$ ，因此 $k$ 可以由一个 $N$ 位无符号整数表示。在按照上面的优化方案计算时，虽然乘法操作不会溢出，但 $n + k$ 的结果仍然可能溢出 $N$ 位无符号整数的上界。考虑到 $l > 1$ ，我们可以进一步优化上面的计算方法消除这样的溢出情况：
+
+$$
+\begin{aligned}
+\left\lfloor \frac{n}{d} \right\rfloor &= \left( n + k \right) \gg l \\
+&= \left\lfloor \left(n+k\right) / 2 \right\rfloor \gg \left(l-1\right)
+\end{aligned}
+$$
+
+其中 $\left\lfloor \left(n+k\right) / 2 \right\rfloor$ 这一部分是计算两个整数的平均值，利用经典的无溢出整数平均值计算算法可计算为：
+
+$$
+\begin{aligned}
+\left\lfloor \frac{n}{d} \right\rfloor
+&= \left\lfloor \left(n+k\right) / 2 \right\rfloor \gg \left(l-1\right) \\
+&= \left(\left(\left(n - k\right) \gg 1\right) + k\right) \gg \left(l-1\right) 
+\end{aligned} \tag{3}
+$$
+
+**实例**：对于以下函数 `test3`：
+
+```cpp
+unsigned test3(unsigned n) {
+  return n / 31;
+}
+```
+
+目前最新的 clang 编译器把它优化为了：
+
+```cpp
+unsigned test3(unsigned n) {
+  // mov   eax, $n
+  // imul  rax, rax, 138547333
+  // shr   rax, 32
+  // sub   $n, eax
+  // shr   $n
+  // add   eax, $n
+  // shr   eax, 4
+  // ret
+  unsigned k = (uint64_t)n * 138547333 >> 32;
+  return (((n - k) >> 1) + k) >> 4;
+}
+```
+
+对于所有 $0 \le l \le \left\lfloor \log_2 31 \right\rfloor$ ，区间 $\left[ 2^{32 + l}, 2^{32 + l} + 2^l \right]$ 内都不存在 31 的倍数，且 31 并不是偶数，因此只能令 $l = \left\lceil \log_2 31 \right\rceil = 5$ 。此时有 $m = \left\lceil 2^{37} / 31 \right\rceil = 4433514629$ ， $m^\prime = m - 2^{32} = 138547333$ ，即计算 `k` 时用到的魔数。k值计算得到后再直接套用 (3) 并带入 $l - 1 = 4$ 就可以得到原除法运算结果。
+
+## 有符号整数除法
+
+针对有符号整数除以常数的优化方案可以基于无符号整数的优化方案进行针对性调整。假设被除数为 $n$ ，除数为 $d$ ，且 $d$ 是一个常数。我们希望计算 $\text{TRUNC}\left(n/d\right)$ ，其中 $\text{TRUNC}\left(x\right)$ 的含义是取 $x$ 的整数部分（即朝 0 的方向把 $x$ 取整到最近的整数）。$n$ 和 $d$ 都是 $N$ 位有符号整数，他们的数值范围为 $-2^{N-1} \le n, d \le 2^{N-1} - 1$ 且 $d \ne 0$ 。
+
+从前述论文中的定理 5.1 可以引申出定理 (2) 在有符号整数上的情况。如果有：
+
+$$
+2^{N-1+l} < m \cdot d \le 2^{N-1+l} + 2^l
+$$
+
+那么一定有：
+
+$$
+\text{TRUNC}\left(\frac{n}{d}\right) = \left\lfloor \frac{n \cdot m}{2^{N-1+l}}\right\rfloor + \left[\frac{n}{d} < 0\right]
+$$
+
+其中若 $\text{expr}$ 成立，$\text{expr}$ 的值为 1，否则其值为 0 。也就是说，对于有符号整数的除法，可以首先按照无符号整数除法的优化方法进行优化，随后判断除法结果是否为负数，如果结果为负则将除法结果加一即可。
+
+**实例**：对于以下函数：
+
+```cpp
+int test(int n) {
+  return n / -10;
+}
+```
+
+目前最新的 clang 编译器把它优化为了：
+
+```cpp
+int test(int n) {
+  // movsxd rax, $n
+  // imul   rax, rax, -1717986919
+  // mov    rcx, rax
+  // shr    rcx, 63
+  // sar    rax, 34
+  // add    eax, ecx
+  // ret
+  int64_t k = (int64_t)n * -1717986919;
+  return (k >> 34) + (k < 0);
+}
+```
+
+优化后代码的最后一步就是判断 `k` 是否为负并在其为负时将结果加 1 。对于优化后代码中的两个魔数，则是完全按照无符号除法的优化方法计算得到的。我们尝试分别令 $l = 0, 1, 2, \cdots, \left\lfloor \log_2 \left|d\right| \right\rfloor$ 并依次判断区间 $\left[2^{31 + l}, 2^{31 + l} + 2^l\right]$ 内是否存在 $d$ 的倍数。当 $l = 3$ 时，区间 $\left[2^{34}, 2^{34} + 8\right]$ 内恰好有一个 -10 的倍数 17179869190 。因此令 $m = -1717986919$ ， $N+l=34$ ，分别对应于优化后的代码中的两个魔数。
+
+与无符号整数除法类似，如果当 $l = 0, 1, 2, \cdots, \left\lfloor \log_2 \left|d\right| \right\rfloor$ 时区间 $\left[2^{N-1+l}, 2^{N-1+l} + 2^l\right]$ 内均不存在 $d$ 的倍数，那么便只能令 $l = \left\lceil \log_2 \left|d\right| \right\rceil$ ， $m = \left\lceil 2^{N-1+l} / \left|d\right| \right\rceil \cdot \text{SIGN}\left(d\right)$ 。此时有 $2^{N-1} < \left|m\right| < 2^N$ 。为处理乘法溢出问题， 当 $m > 0$ 时，效仿无符号整数除法的处理情况，可以将优化后的操作变换如下：
+
+$$
+\begin{aligned}
+\left\lfloor \frac{n \cdot m}{2^{N-1+l}} \right\rfloor
+&= \left\lfloor \frac{n \cdot \left(2^N+m^\prime\right)}{2^{N-1+l}}\right\rfloor \\
+&= \left\lfloor \frac{n + \left\lfloor n \cdot m^\prime / 2^N \right\rfloor}{2^{l-1}}\right\rfloor \\
+&= \left( n + \left(n \cdot m^\prime \gg_A N\right) \right) \gg_A \left(l-1\right)
+\end{aligned}
+$$
+
+其中 $\gg_A$ 表示算术右移操作。当 $m < 0$ 时也可以类似地得出相应的计算方法。
+
+**实例**：对于以下函数：
+
+```cpp
+int test(int n) {
+  return n / 15;
+}
+```
+
+目前最新的 clang 编译器把它优化为了：
+
+```cpp
+int test(int n) {
+  // movsxd rax, $n
+  // imul   rcx, rax, -2004318071
+  // shr    rcx, 32
+  // add    eax, ecx
+  // mov    ecx, eax
+  // shr    ecx, 31
+  // sar    eax, 3
+  // add    eax, ecx
+  // ret
+  int t1 = (uint64_t)((int64_t)n * -2004318071) >> 32;
+  int t2 = n + t1;
+  return (t2 >> 3) + (n < 0);
+}
+```
+
+同样，优化后代码的最后一步加法就是判断除法结果是否为负并在其为负时将结果加 1 。由于当 $l = 0, 1, 2, \cdots, \left\lfloor \log_2 15 \right\rfloor$ 时区间 $\left[2^{31+l}, 2^{31+l} + 2^l\right]$ 内均不存在 15 的倍数，因此只能令 $l = \left\lceil \log_2 15 \right\rceil = 4$ ，因此需要将 `t2` 右移 $l-1=3$ 位。此时 $m = \left\lceil 2^{35} / 15 \right\rceil = 2290649225$ ， $m^\prime = m - 2^{32} = -2004318071$ ，对应于优化后代码中的乘法操作的魔数操作数。
