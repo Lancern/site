@@ -1,7 +1,6 @@
 ---
 import BookmarkIcon from "@components/icon/BookmarkIcon.astro";
 import CalendarIcon from "@components/icon/CalendarIcon.astro";
-import DateText from "@components/DateText.astro";
 import TextWithIcon from "@components/TextWithIcon.astro";
 import type { PostFrontmatter } from "@scripts/posts";
 
@@ -19,7 +18,7 @@ const { frontmatter, url } = Astro.props;
     <div class="post-meta-item post-meta-date">
       <TextWithIcon>
         <CalendarIcon size="1.2em" slot="icon" />
-        <DateText date={frontmatter.date} />
+        {new Date(frontmatter.date).toLocaleDateString()}
       </TextWithIcon>
     </div>
     <div class="post-meta-item post-meta-category">

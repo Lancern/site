@@ -1,12 +1,9 @@
 ---
 import BaseLayout from "@layouts/BaseLayout.astro";
 import PostList, { type PostInfo } from "@components/PostList.astro";
-import type { PostFrontmatter } from "@scripts/posts";
-import type { MDXInstance, MarkdownInstance } from "astro";
+import type { PostInstance } from "@scripts/posts";
 
-type GlobInstance = MarkdownInstance<PostFrontmatter> | MDXInstance<PostFrontmatter>;
-
-const allPosts = await Astro.glob<GlobInstance>("../pages/posts/**/*.{md,mdx}");
+const allPosts = await Astro.glob<PostInstance>("../pages/posts/**/*.{md,mdx}");
 
 // Filter out the most recent 10 published posts to be displayed on this page.
 const allPublishedPosts = allPosts.filter((post) => !post.frontmatter.draft);

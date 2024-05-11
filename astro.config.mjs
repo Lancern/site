@@ -5,6 +5,7 @@ import remarkMath from "remark-math";
 
 // https://astro.build/config
 export default defineConfig({
+  site: "https://lancern.xyz",
   integrations: [mdx()],
   markdown: {
     remarkPlugins: [remarkMath],
