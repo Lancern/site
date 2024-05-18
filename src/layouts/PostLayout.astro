@@ -14,7 +14,7 @@ type Props = MDXLayoutProps<PostFrontmatter>;
 const { frontmatter } = Astro.props;
 ---
 
-<MDXLayout frontmatter={frontmatter}>
+<MDXLayout {...Astro.props}>
   <div class="meta-line" slot="meta">
     <div class="meta-item">
       <TextWithIcon>
