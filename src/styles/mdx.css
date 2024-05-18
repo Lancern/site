@@ -1,12 +1,12 @@
 .mdx-body {
-  line-height: 1.45em;
+  line-height: 1.6em;
 }
 
 .mdx-body p,
 .mdx-body table,
 .mdx-body blockquote,
 .mdx-body pre {
-  margin: 32px 0;
+  margin: 36px 0;
 }
 
 .mdx-body hr {
