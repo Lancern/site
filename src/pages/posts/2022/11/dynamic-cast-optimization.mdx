@@ -1,0 +1,335 @@
+---
+layout: "@layouts/PostLayout.astro"
+title: dynamic_cast 的实现方法分析以及性能优化
+date: 2022-11-04
+category: C++
+tags: [benchmark, c++, libcxxabi]
+---
+
+`dynamic_cast` 是 C++ 中包含的四种类型转换操作符之一，它利用运行时类型识别（RTTI）特性在运行时检查并转换多态对象的类型。它的主要功能包括：
+
+- 从基类子对象指针得到最派生对象指针：`dynamic_cast<void*>(expr)` 。`expr` 是一个指向某个最派生对象中的某个基类子对象的指针，`dynamic_cast` 可用于从 `expr` 得到其所属的最派生对象的指针。由于并不清楚最派生对象的具体类型，因此这种情况下只能返回一个 `void*` 类型的指针指向最派生对象。
+- 从基类对象指针或引用得到派生类指针或引用（向下转换，downcast）：`dynamic_cast<Derived*>(base_expr) `。这应该是使用 `dynamic_cast` 最常见的场景。此时 `base_expr` 是一个指向 `Base` 对象的指针，`Derived` 是一个派生自 `Base` 类的类型。`dynamic_cast` 将检查 `base_expr` 指向的 `Base` 对象是否是某个唯一的 `Derived` 对象的基类子对象。如果检查通过，`dynamic_cast` 将会返回这个唯一的 `Derived` 对象的指针。
+- 从一个类对象指针或引用得到另一个无直接关联的类对象指针或引用（侧向转换，`sidecast`）：`dynamic_cast<Left*>(right_expr)` 。此时 `right_expr` 是一个指向 `Right` 类型对象的指针，程序希望将其转换为一个 `Left` 类型对象的指针，`Left` 和 `Right` 不构成继承关系。`dynamic_cast` 首先通过 `right_expr` 指针得到其所属的最派生对象的指针以及类型，并检查最派生对象是否有一个唯一的类型为 `Left` 的基类子对象。如果检查通过，`dynamic_cast` 将会返回这个唯一的 `Left` 对象的指针。
+
+上面的第二个功能点在一定的额外条件满足时也可以使用 `static_cast` 进行实现，但 `static_cast` 不会检查对象的类型是否匹配。如果尝试将一个并不指向 `Derived` 对象中的 `Base` 基类子对象的指针转换到 `Derived` 对象指针将导致未定义行为。
+
+一般认为频繁使用 `dynamic_cast` 会损害程序的性能，并暗示程序在设计上存在瑕疵。作者对上述三种 `dynamic_cast` 功能在不同实现（libsupc++ 以及 libcxxabi）下的性能进行了测试。由于结果非常多，不便于直接内嵌到本文中，因此请移步 [GitHub Gist](https://gist.github.com/Lancern/212a26a3144343f459428dffe202cde0) 上查看所有的测试代码、测试数据以及测试结果可视化图。测试集中的各项测试功能如下：
+
+- `Chain [middle | fail] <X levels>`：继承关系构成一根单链，没有虚继承；执行向下转换，转换的层数由 `X` 给出；如果存在 `middle` 字样，说明转换的目标类型不是对象的动态类型；如果存在 `fail` 字样，说明转换失败。
+- `Vchain [middle | fail] <X levels>`：继承关系构成一根单链，所有继承关系都是虚继承；`middle` 、`fail` 和 `X` 的含义与 `chain` 相同。
+- `DAG [rightmost | leftmost | middle | sidecast | fail] <X levels>`：继承关系构成一个有向无环图（DAG），没有虚继承；如果存在 `middle` 字样，说明转换到的目标类型不是对象的动态类型；如果存在 `sidecast` 字样，则执行侧向转换，否则执行向下转换，转换的层数由 `X` 给出；如果存在 `fail` 字样，说明转换失败。`rightmost` 以及 `leftmost` 表示转换所沿着的继承链在继承图中的伸展方向：是沿着基类的声明顺序发展还是沿着基类的声明顺序的逆序发展。
+- `VDAG [rightmost | leftmost | middle | sidecast | fail] <X levels>`：继承关系构成一个 DAG，所有继承关系都是虚继承；`leftmost`、`rightmost`、`middle`、`sidecast`、`fail` 以及 `X` 的含义与 DAG 相同。
+- `cast to complete`：使用 `dynamic_cast<void*>` 将基类子对象指针转换为最派生对象指针。
+- `Static cast`：使用 `static_cast` 执行不带运行时类型检查的向下转换。
+
+另外，作者在测试时仅测试指针转换功能，不会测试引用转换功能。因此当引用转换失败时抛出异常的开销没有测量。
+
+从测试结果中可以看到，`dynamic_cast` 的性能在不同功能上的波动非常大，而且依赖于具体应用的类型派生关系。使用 `dynamic_cast` 将基类子对象指针转换为最派生对象指针是最快的，甚至可以与没有任何检查的 `static_cast` 的效率基本持平；而在由虚继承组成的 DAG 关系图上执行向下转换时则产生了最高的性能开销，libsupc++ 的实现在这种情况下的效率与最快的情况相差了 500 多倍。
+
+为什么 `dynamic_cast` 的效率在某些情况下会如此低下？有没有可能提升 `dynamic_cast` 的效率？这是本文想要探讨的主题。本文会介绍 `dynamic_cast` 在 Itanium ABI 上的基本实现原理，并对 libcxxabi 的实现进行性能分析与改进。
+
+## 基本实现原理
+
+### 基类子对象指针转换为最派生对象指针
+
+在前面的测试结果中，将基类子对象指针转换为最派生对象指针是一个非常快速的转换。这是因为 Itanium ABI 要求所有多态类型的虚表中都需要包含一个特殊的虚表项，该虚表项中存放了基类子对象在最派生对象内部的偏移量。`dynamic_cast` 会直接将这个偏移量添加到基类子对象指针上，然后便得到了最派生对象的指针。例如：
+
+```cpp
+struct Base { virtual ~Base() = default; };
+
+void* ConvertToCompleteObject(Base* base_ptr) {
+  return dynamic_cast<void*>(base_ptr);
+}
+```
+
+编译器为上述代码生成的汇编为：
+
+```asm
+ConvertToCompleteObject(Base*):
+  test    rdi, rdi
+  je      .L3
+  mov     rax, QWORD PTR [rdi]
+  add     rdi, QWORD PTR [rax-16]
+  mov     rax, rdi
+  ret
+.L3:
+  xor     eax, eax
+  ret
+```
+
+可以看到，此时 `dynamic_cast` 做的事情非常简单，就是从虚表中将偏移量取出然后加到基类子对象指针上即可得到最派生对象指针。而且，这个转换逻辑并不会因为 `Base` 是否为最派生对象的虚基类而有所不同。因此，这种情况下 `dynamic_cast` 的效率非常高，几乎仅仅是访问一次虚表的开销。
+
+### 向下转换与侧向转换
+
+向下转换与侧向转换都要求在转换前进行运行时类型检查，确保要转换的对象的真实类型与要转换到的目标类型确实相匹配，因此转换的复杂性大大增加了。
+
+#### RTTI
+
+为了实现运行时类型检查，C++ 标准提供了一套名为 RTTI 的接口，这套接口的核心是 `std::type_info` 类，它用于在运行时表示某个类型的相关信息。但这套接口提供的功能过于简单，它只支持查询一个多态对象的动态类型以及类型的基本属性（例如类型的名称等），并不支持动态查询不同的类型之间的关系（例如查询两个 `std::type_info` 所表示的类型是否构成继承关系等）。因此，各个 ABI 都需要对 RTTI 定义的功能进一步扩充以满足 `dynamic_cast` 的需求。最关键的扩充部分在于以下三点：
+
+1. 需要能够动态查询两个类型是否构成继承关系；
+2. 在两个类型构成继承关系的基础上，需要能够进一步查询这两个类型构成何种继承关系：是否为公开继承、是否为虚继承等；
+3. 在两个类型构成继承关系的基础上，需要能够进一步查询如何对基类子对象指针施加一定的偏移才能使其指向子类对象指针。
+
+由于 RTTI 机制的存在，编译器会在必要的条件下为每个类型生成一个 `std::type_info` 结构描述这个类型。Itanium ABI 进一步扩展了 `std::type_info` 结构中所包含的数据，使之能够描述类类型之间的继承关系。具体地，Itanium ABI 以 `std::type_info` 作为基础，派生定义了如下三个描述不同情况的类类型的 `std::type_info` 子结构：
+
+```cpp
+struct __class_type_info :  std::type_info {};
+
+struct __si_class_type_info : __class_type_info {
+  const __class_type_info *__base_type;
+};
+
+struct __vmi_class_type_info : __class_type_info {
+  unsigned int __flags;
+  unsigned int __base_count;
+  __base_class_type_info __base_info[1];
+};
+```
+
+它们各自描述不同情况的类类型：
+
+- `__class_type_info` 用于描述没有任何基类的类类型；
+- `__si_class_type_info` 用于描述那些有且只有一个直接公开非虚基类的类类型，其中的 `__base_type` 成员即指向描述基类的 `__class_type_info` 对象；
+- `__vmi_class_type_info` 用于描述不满足上述两种情况的其他所有的类类型。其中的 `__flags` 成员是一组标志位，描述这种情况下类类型的的某些属性；`__base_count` 表示类类型有多少个直接基类，`__base_info` 是一个实际长度为 `__base_count` 的数组，数组中的每个元素是一个 `__base_class_type_info` 对象用于描述一个基类。
+
+上面提到的 `__base_class_type_info` 的定义如下：
+
+```cpp
+struct __base_class_type_info {
+  const __class_type_info *__base_type;
+  long __offset_flags;
+};
+```
+
+一个 `__base_class_type_info` 对象用于描述一个类的直接基类和继承种类。其中 `__base_type` 成员指向描述基类的 `__class_type_info` 对象，而 `__offset_flags` 成员是一个 32 位或 64 位整数，其中低 8 位是一组标志位，用于描述继承的种类（是否为公有继承、是否为虚继承）；高位则是一个偏移量：如果这个继承关系不是虚继承，那么这个偏移量直接给出了父类子对象在子类对象中的静态偏移；如果继承关系是虚继承，那么这个偏移量给出了需要给父类子对象的虚表指针施加的偏移使得父类子对象虚表指针指向表示虚基类子对象偏移的虚表项。
+
+可以看到，上述四种类型共同描述了程序中的多态类型的完整继承结构。在必要的时候，编译器会为程序中的每个类类型生成对应的 `__class_type_info` 结构或子结构存放在数据区中。另外，多态类型对象的虚表中也会包含一项指向描述对象动态类型的 `__class_type_info` 结构的指针，这样便可以从虚表中查询对象的动态类型。
+
+#### 继承关系的动态查询
+
+基于上述结构，我们很容易设计出在运行时动态查询两个 `__class_type_info` 所描述的类是否构成（公开）继承关系的算法。注意到 `std::type_info` 本身是带有虚表的（因为有虚析构），因此我们可以任意地向 `std::type_info` 添加虚函数。我们向 `__class_type_info` 中添加一个虚函数 `is_inherit_from` 用于检查当前 `__class_type_info` 对象所描述的类类型是否（公开）继承自另一个类类型：
+
+```cpp
+struct __class_type_info :  std::type_info {
+  virtual bool is_inherit_from(const __class_type_info& base) const {
+    return this == &base;
+  }
+};
+```
+
+注意我们认为任何一个类类型都继承自它自身。它在两个子类中的实现也非常容易写出：
+
+```cpp
+struct __si_class_type_info : __class_type_info {
+  const __class_type_info *__base_type;
+
+  bool is_inherit_from(const __class_type_info& base) const override {
+    if (this == &base) {
+      return true;
+    }
+    return __base_type->is_inherit_from(base);
+  }
+};
+
+struct __vmi_class_type_info : __class_type_info {
+  unsigned int __flags;
+  unsigned int __base_count;
+  __base_class_type_info __base_info[1];
+
+  bool is_inherit_from(const __class_type_info& base) const override {
+    if (this == &base) {
+      return true;
+    }
+    for (unsigned i = 0; i < __base_count; ++i) {
+      // Test whether the inheritance is a public inheritance.
+      // Protected or private inheritance is not interesting.
+      if (!(__base_info[i].__offset_flags & __public_mask)) {
+        continue;
+      }
+      if (__base_info[i].__base_type->is_inherit_from(base)) {
+        return true;
+      }
+    }
+    return false;
+  }
+};
+```
+
+#### 指针调整偏移的动态查询
+
+当查询出两个类型具有继承关系后，我们还可以基于上述结构，进一步查询出为了将基类子对象指针转换为派生类对象指针所需要在指针上施加的偏移量。我们利用的是 `__base_class_type_info` 中的 `__offset_flags` 成员，刚才已经介绍，该成员除了低 8 位以外的高位是一个偏移量，用于指示应该如何调整父类子对象指针使之指向派生类对象。这里有两种情况，即父类是否是子类的虚基类。当父类不是子类的虚基类时，`__offset_flags` 成员是一个可以直接施加到父类子对象指针上的偏移，这个偏移会将父类子对象指针调整为指向子类对象；当父类是子类的虚基类时，`__offset_flags` 成员是一个施加到父类子对象的虚表指针上的偏移，这个偏移会使得父类子对象的虚表指针指向描述虚基类相对于子类对象的偏移的虚表项。但无论是哪种情况，通过 `__offset_flags` 成员，我们都可以将直接基类子对象的指针调整为子类对象的指针；在此基础上，只要沿着继承链一级一级地调整基类子对象指针，最终就可以将基类子对象指针转换为派生类对象指针。
+
+到目前为止，我们介绍了 Itanium ABI 如何通过扩充 C++ 标准提供的 RTTI 接口来支持 `dynamic_cast` 所需要的额外动态类型查询能力。下面我们将介绍 `dynamic_cast` 是如何基于这些扩充的能力来实现的。
+
+#### `dynamic_cast` 的向下转换算法
+
+`dynamic_cast<To*>((From*)from)` 是一个向下转换，当且仅当 `From` 是 `To` 的一个直接或间接基类。这个转换什么时候会失败呢？首先，如果 `from` 所指向的对象的动态类型（也就是 `from` 所指向的基类子对象所属的最派生对象的类型）不是 `To` 或 `To` 的子类，那么转换显然会失败；另外，被许多人忽略的一点是，即使满足上一点要求，转换仍然可能存在二义性。考虑如下这个例子：
+
+```cpp
+struct From { virtual ~From() = default; };
+
+struct To : virtual From {};
+
+struct Left : To {};
+struct Right : To {};
+
+struct Derived : Left, Right {};
+
+Derived obj;
+From* from = &obj;
+To* to = dynamic_cast<To*>(from);  // Ambiguous
+```
+
+上面的例子中，`dynamic_cast` 将不知晓应该是将 `From` 指针转换为指向 `Derived::Left::To` 子对象的指针还是转换为 `Derived::Right::To` 子对象的指针，因此上述转换会失败。我们如果将继承关系可视化为一张 DAG：
+
+TODO
+
+其中实线表示非虚继承关系、虚线表示虚继承关系。那么可以看到，在向下转换时，必须满足从最派生对象（即 `Derived` 对象）到 `from` 基类子对象（即 `Base` 基类子对象）的路径上有且仅有一个 `To` 类型的基类子对象，否则就会产生二义性错误。
+
+综上，`dynamic_cast` 在执行向下转换时的算法是：
+
+- 首先通过 `from` 得到最派生对象类型（即 `Derived` ）；
+- 然后从最派生对象开始搜索整个继承图，搜索出所有的从最派生对象到 `from` 所指向的对象的继承链；
+- 如果只有一个 `To` 对象存在于所有的继承链中，那么转换成功，转换目标为这个唯一的 `To` 对象；否则转换失败。
+
+基于前面章节中 Itanium ABI 为 RTTI 所扩展的接口，可以很容易实现这个算法。
+
+#### `dynamic_cast` 的侧向转换算法
+
+`dynamic_cast<To*>((From*)from)` 是一个侧向转换，当且仅当 `From` 不是 `To` 的直接或间接基类。与向下转换时类似，此时也可能出现两种转换失败原因：即对象的动态类型并不是 `To` 或 `To` 的子类、或者转换存在二义性。不难想到，此时的二义性问题主要是最派生对象存在多个 `To` `基类子对象，dynamic_cast` 无法决定需要转换为哪一个基类子对象。例如：
+
+TODO
+
+此时如果将 `From*` 转换为 `To*`，`dynamic_cast` 将无法知晓应该转换为指向 `Derived::Left::To` 子对象还是转换为 `Derived::Right::To` 子对象，因此转换失败。
+
+综上，`dynamic_cast` 在执行侧向转换时的算法是：
+
+- 首先通过 `from` 得到最派生对象类型（即 `Derived` ）；
+- 然后从最派生对象开始搜索整个继承图，搜索出所有的从最派生对象到 `To` 对象的继承链；
+- 如果只有一个 `To` 对象存在于所有的继承链中，那么转换成功，转换目标为这个唯一的 `To` 对象；否则转换失败。
+
+同样，基于前面章节中 Itanium ABI 为 RTTI 所扩展的接口，可以很容易实现这个算法。
+
+上面介绍了 `dynamic_cast` 分别在执行向下转换以及侧向转换时的算法。我们可以基于这两个算法总结出一个通用的、可以同时处理向下转换和侧向转换的算法：
+
+- 首先通过 `from` 得到最派生对象类型（即 `Derived` ）；
+- 从最派生对象开始搜索整个继承图，搜索出所有的：
+  - 从最派生对象到一个 `To` 基类子对象的路径；
+  - 从最派生对象到 `from` 所指向的基类子对象的路径；
+- 如果有一个 `To` 对象在从最派生对象到 `from` 所指向的基类子对象的路径上，且这个 `To` 对象到 `from` 所指向的基类子对象的路径上的所有继承均为公开继承，那么转换结果为到这个 `To` 对象的指针；
+- 否则，如果有一个唯一的最派生对象的 `To` 类型基类子对象使得从最派生对象到该基类子对象的路径上的所有继承均为公开继承，那么转换结果为到这个 `To` 对象的指针；
+- 否则，转换失败。
+
+## 具体实现方法
+
+本节将介绍具体实现的方法以及具体实现中的优化手段。本节介绍的具体实现都是基于 Itanium ABI 的，主要包含 GNU/libstdc++ 所使用的 libsupc++ 以及 LLVM/libc++ 所使用的 libcxxabi 。
+
+### Itanium ABI 接口：`__dynamic_cast`
+
+编译一个简单的包含 `dynamic_cast` 示例代码：
+
+```cpp
+struct Base { virtual ~Base(); };
+struct Derived : Base {};
+
+Derived* foo(Base* ptr) {
+  return dynamic_cast<Derived*>(ptr);
+}
+```
+
+编译器生成的代码为：
+
+```asm
+foo(Base*):
+  test    rdi, rdi
+  je      .L2
+  xor     ecx, ecx
+  mov     edx, OFFSET FLAT:typeinfo for Derived
+  mov     esi, OFFSET FLAT:typeinfo for Base
+  jmp     __dynamic_cast
+.L2:
+  xor     eax, eax
+  ret
+```
+
+可以看到，除空指针检查之外，`dynamic_cast` 的大部分任务是由一个 ABI 提供的 `__dynamic_cast` 函数所完成的。这个 `__dynamic_cast` 函数的原型如下：
+
+```cpp
+extern "C"
+void* __dynamic_cast (const void *sub,
+                      const abi::__class_type_info *src,
+                      const abi::__class_type_info *dst,
+                      std::ptrdiff_t src2dst_offset);
+```
+
+四个参数的含义分别为：
+
+- `sub` 表示需要转换的指针，即传入 `dynamic_cast` 的指针。
+- `src` 指向一个 `__class_type_info` 结构，表示需要转换的指针所指向的对象的静态类型。在上述例子中，`src` 即为描述 `Base` 的 `__class_type_info` 结构。
+- `dst` 指向一个 `__class_type_info` 结构，表示需要转换到的目标类型。在上述例子中，`dst` 即为描述 `Derived` 的 `__class_type_info` 结构。
+- `src2dst_offset` 是一个由 Itanium ABI 所规定的 hint 值，这个值与 `dynamic_cast` 在热路径上的性能优化密切相关。我们将在后续介绍相关优化时详细介绍这个值的含义。在上述例子中，这个值是 0 。
+
+`__dynamic_cast` 将进行必要的运行时类型检查，并返回转换后的指针作为 `dynamic_cast` 表达式的值。如果转换失败，那么 `__dynamic_cast` 将返回空指针。
+
+### 热路径
+
+本系列的第一部分中介绍了 `dynamic_cast` 执行向下转换和侧向转换的一般性算法。那两个算法虽然正确，但是效率非常低下，每次转换都可能会搜索整张继承图，严重损害热路径上的性能。`dynamic_cast` 在它的热路径上需要更加高效的实现，那么 `dynamic_cast` 的热路径是什么呢？最基本地，我们应该可以达成共识，向下转换的使用频次应该远高于侧向转换，甚至许多 C++ 开发者都并不清楚 `dynamic_cast` 可以做侧向转换。因此，所有的已有实现都会针对向下转换进行优化，甚至允许以牺牲一定的侧向转换性能为代价来提升向下转换的性能。从文章开头的性能测试结果中也可以发现，不管是 libsupc++ 的实现还是 libcxxabi 的实现，`dynamic_cast` 在执行向下转换时的性能都明显优于侧向转换。另外，所有的实现基本都会针对一种更加特殊的向下转换进行进一步优化，即转换的目标类型 `To` 就是对象的完整类型（即动态类型）。综上，`dynamic_cast` 的热路径的排序为：
+
+- 向下转换，并且转换到的类型 `To` 就是对象的动态类型；
+- 其他的向下转换；
+- 侧向转换。
+
+### 优化方法
+
+确定了哪种情况是热路径，下一个问题是如何确定当前 `__dynamic_cast` 函数正在热路径中被调用，并相应地优化热路径的性能。这里就要用到 Itanium ABI 提供的 `src2dst_offset` 参数了。这个参数的值是由编译器在编译期直接计算出的，相当于为 `__dynamic_cast` 的实现提供了额外的编译时的已知信息来辅助实现进行优化。它一共有 4 种可能的取值或取值范围：
+
+- 如果 `src2dst_offset` 是一个非负整数值，说明 `From` 是 `To` 的唯一一个公开非虚基类，且 `From` 基类子对象在一个 `To` 对象中的偏移为 `src2dst_offset` ；
+- 如果 `src2dst_offset` 为 -2，说明 `From` 不是 `To` 的公开基类；
+- 如果 `src2dst_offset` 为 -3，说明 `To` 存在多个公开 `From` 基类，但是这些公开 `From` 基类都不是 `To` 的虚基类；
+- 如果 `src2dst_offset` 是其他值，说明没有可用的 hint 。
+
+怎么利用 `src2dst_offset` 为我们提供的这些额外信息呢，我们不妨按照热路径的顺序依次考虑一下。
+
+#### 向下转换到对象的动态类型
+
+首先是向下转换到对象的动态类型这种情况。这种情况非常容易识别，通过 `from` 指针得到最派生对象的指针后，便可以通过最派生对象的虚表得到描述最派生对象类型的 `__class_type_info` 对象。只需要将描述转换目标类型的 `__class_type_info` 对象与之比较便可以知晓是否是这种情况。在这种情况下，很容易根据 `src2dst_offset` 的值进行进一步优化。
+
+- 如果 `src2dst_offset` 是一个非负整数值，说明 `From` 是 `To` 的唯一一个公开非虚基类。需要稍微注意，`To` 类型可能还有其他 `From` 基类，但那些 `From` 基类都不是 `To` 的公开基类。在这种情况下，我们再额外计算一下最派生对象到 `from` 所指向的基类子对象的偏移，如果该偏移与 `src2dst_offset` 相同，说明 `from` 所指向的基类子对象就是 `src2dst_offset` 所描述的那个唯一的公开非虚基类，此时便可以直接返回最派生对象指针；否则可以直接返回空指针表示转换失败，因为此时 `from` 指向 `To` 的一个非公开基类子对象。
+- 如果 `src2dst_offset` 为 -2，说明 `From` 不是 `To` 的公开基类，此时可以直接返回空指针表示转换失败。
+
+注意，上述两种情况完全不需要任何重量级的继承图搜索等操作，只需要若干条非常简单的虚表访问、数值运算等指令即可完成，效率非常高，在进行性能测试时这些热路径只需要 3 至 5 纳秒便可完成转换工作。
+
+当 `src2dst_offset` 为其他取值时，我们无法利用 `src2dst_offset` 进行进一步优化。此时我们只能搜索整张继承图，搜索出从最派生对象所有的 `From` 公开基类子对象。如果 `from` 所指向的对象是这些 `From` 基类子对象中的某一个，那么转换成功，转换结果是最派生对象指针；否则转换失败。在搜索继承图的过程中可以应用一些剪枝方法降低搜索开销。例如一旦搜索到 `from` 指向的对象就停止搜索、不搜索包含私有继承的路径等。
+
+#### 其他的向下转换与侧向转换
+
+除了向下转换到对象的动态类型之外，其他的向下转换情况是难以直接识别的，也难以直接将其他的向下转换情况与侧向转换区分开。这是因为，在这种情况下，向下转换成功的条件包括：
+
+- 转换到的类型 `To` 需要是对象的动态类型的一个基类（但不需要是公开基类，私有基类也可以）；
+- `from` 所指向的 `From` 对象需要是上述的 `To` 基类子对象的基类子对象。
+
+这两个条件都不好直接检查，都需要搜索继承图才能直接确定。因此，一般来说，如果发现转换并不是向下转换到对象的动态类型，`__dynamic_cast` 就可以直接回退到前文介绍的一般算法，开始搜索整个继承图以确定转换是否合法以及转换目标。但是，本着“朝着向下转换进行优化”这一原则，我们可以考虑以牺牲一定侧向转换的性能为代价，进一步对向下转换的性能进行优化。
+
+不妨考虑一下此时当 `src2dst_offset` 为一个非负整数值时的情况。这意味着在类型上 `From` 类是 `To` 类的唯一一个公开基类。这进一步意味着一旦上面的第一个条件成立，第二个条件就不用检查了，可以直接返回转换结果了。因此，我们此时可以消耗一点 CPU 时间检查一下第一个条件是否成立，如果第一个条件成立，则可以直接将 `from` 指针减去 `src2dst_offset` 即可得到转换结果。如何检查呢？我们可以首先将 `from` 指针减去 `src2dst_offset` ，得到一个“假设存在”的 `To` 对象指针。然后，我们开始从最派生对象开始搜索继承图，一边搜索一边调整最派生对象指针使得它永远指向当前访问的继承图节点所表示的基类子对象。如果搜索了一个类型 `To` 类型的基类子对象、而且在最派生对象中该基类子对象的指针与之前得到的“假设存在”的 `To` 对象指针一致，则认为搜索成功，运行时类型检查完成。注意这个检查对于侧向转换来说意义不大，因此会拖慢侧向转换的性能，但是会使得向下转换的效率提升，而这正是我们希望的效果。
+
+在其他情况下，除了在搜索继承图时进行一些剪枝以外，没有更好的优化手段。因此，如果上述的所有优化路径均不成立，那么 `__dynamic_cast` 将回退到最慢的路径，开始搜索整个继承图进行检查和转换。
+
+## libcxxabi
+
+本文开始时对 libcxxabi 以及 libsupc++ 的 `__dynamic_cast` 实现进行了性能筛查，发现 libcxxabi 的实现在热路径上的性能有严重问题：
+
+- 当转换情况是向下转换到对象的动态类型时，libcxxabi 的性能全面落后于 libsupc++ 。libsupc++ 在这种情况下具有非常高的效率，其消耗的 CPU 时间与类型的继承结构无关；而 libcxxabi 消耗的 CPU 时间则与类型的继承结构相关，当类型的继承结构复杂时，libcxxabi 在这个最热的路径上消耗的时间可以达到 libsupc++ 的数十乃至数百倍。
+- 当转换情况是其他的向下转换时，libcxxabi 在沿着一根单链结构的继承关系上转换时效率优于 libsupc++，在沿着一个 DAG 形状的网状继承关系上转换时效率则低于 libsupc++。
+- 其他情况下 libcxxabi 的表现还是不错的，基本上都能优于 libsupc++ 的表现。但其他情况在现实中出现的频率比较低，是很冷的路径。
+
+翻看 libcxxabi 源代码，惊讶地发现 libcxxabi 在实现 `__dynamic_cast` 时除了在搜索继承图时实现了必要的剪枝外几乎没有任何优化，完全没有利用 `src2dst_offset` 所提供的优化信息。这也是导致 libcxxabi 在热路径上的路径几乎全面落后于 libsupc++ 的原因。
+
+针对这一问题，作者向 libcxxabi 社区提交了一个 patch 使得 `__dynamic_cast` 可以利用 `src2dst_offset` 来优化热路径的性能。这个 patch 目前正在 LLVM Phabricator 上接受社区的 review，链接为 https://reviews.llvm.org/D137315 。这个 patch 向 libcxxabi 上的 `__dynamic_cast` 添加了前文所讨论的所有热路径优化。初步的性能筛查结果显示，在 patch 后，libcxxabi 在热路径上的性能将全面优于 libsupc++ 。具体的性能筛查数据可以在前面给出的 LLVM Phabricator 链接中找到。
+
+## 总结
+
+本文对 `dynamic_cast` 的基本原理以及现有实现方法和优化手段进行了详细介绍。`dynamic_cast` 的性能表现严重依赖于转换的源类型和目标类型在继承图上的关系，最快情况下可以在数个纳秒内便完成，但最慢情况下其延迟会升高至数百纳秒甚至微秒级别。因此，在程序中过于频繁地使用 `dynamic_cast` 可能导致应用程序的性能表现下降，并暗示程序在设计上存在问题。由于 `dynamic_cast` 在延迟上的不确定性，许多需要依赖动态类型向下转换的性能敏感的应用程序要么会自己发明一套延迟稳定的向下类型转换方案（例如 LLVM），或者通过重新设计程序的结构来避免频繁使用 `dynamic_cast` 。
+
+本文也对两个主流的 Itanium ABI 实现，即 libcxxabi 以及 libsupc++ 提供的 `dynamic_cast` 实现进行了性能筛查。结果显示 libcxxabi 在热路径上的性能呈现明显劣势。针对这一问题，作者向 libcxxabi 提交了一个 patch 以优化 libcxxabi 在热路径上的性能表现。

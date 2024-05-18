@@ -2,18 +2,30 @@
   line-height: 1.6em;
 }
 
+.mdx-body h1,
+.mdx-body h2,
+.mdx-body h3,
+.mdx-body h4,
+.mdx-body h5,
+.mdx-body h6,
 .mdx-body p,
 .mdx-body table,
 .mdx-body blockquote,
 .mdx-body pre {
-  margin: 36px 0;
+  margin-top: 2em;
+  margin-bottom: 0;
+}
+
+.mdx-body li {
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
 }
 
 .mdx-body hr {
   border: 0;
   height: 1px;
   background-color: #cacaca;
-  margin: 64px 20%;
+  margin: 4em 20%;
 }
 
 .mdx-body code {
