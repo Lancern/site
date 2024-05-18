@@ -1,0 +1,37 @@
+---
+import type { MDXLayoutProps } from "astro";
+
+import BaseLayout from "./BaseLayout.astro";
+
+import "@styles/mdx.css";
+
+type Props = MDXLayoutProps<{
+  title: string;
+}>;
+
+const { frontmatter } = Astro.props;
+---
+
+<BaseLayout title={frontmatter.title + " - Lancern's Home"}>
+  <main class="mdx">
+    <header class="header">
+      <h1 class="title">{frontmatter.title}</h1>
+      <slot name="meta" />
+    </header>
+    <div class="mdx-body">
+      <slot />
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .mdx .header {
+    margin-top: 24px;
+    margin-bottom: 32px;
+  }
+
+  .mdx .title {
+    text-align: center;
+    margin-bottom: 12px;
+  }
+</style>

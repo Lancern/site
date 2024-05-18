@@ -1,29 +1,29 @@
-.post-body {
+.mdx-body {
   line-height: 1.45em;
 }
 
-.post-body p,
-.post-body table,
-.post-body blockquote,
-.post-body pre {
+.mdx-body p,
+.mdx-body table,
+.mdx-body blockquote,
+.mdx-body pre {
   margin: 32px 0;
 }
 
-.post-body hr {
+.mdx-body hr {
   border: 0;
   height: 1px;
   background-color: #cacaca;
   margin: 64px 20%;
 }
 
-.post-body code {
+.mdx-body code {
   font-size: 0.9em;
   padding: 0.2em 0.4em;
   background-color: #eaeaea;
   border-radius: 4px;
 }
 
-.post-body blockquote {
+.mdx-body blockquote {
   margin-left: 0;
   margin-right: 0;
   padding: 1em 1em;
@@ -33,47 +33,47 @@
   color: #646464;
 }
 
-.post-body blockquote :first-child {
+.mdx-body blockquote :first-child {
   margin-top: 0;
 }
 
-.post-body blockquote :last-child {
+.mdx-body blockquote :last-child {
   margin-bottom: 0;
 }
 
-.post-body pre.astro-code {
+.mdx-body pre.astro-code {
   padding: 1em;
   border-radius: 8px;
   line-height: 1.2em;
 }
 
-.post-body pre.astro-code code {
+.mdx-body pre.astro-code code {
   padding: 0;
   background-color: inherit;
   border-radius: 0;
 }
 
-.post-body table {
+.mdx-body table {
   min-width: 100%;
 }
 
-.post-body table,
-.post-body table th,
-.post-body table td {
+.mdx-body table,
+.mdx-body table th,
+.mdx-body table td {
   border: 1px solid black;
   border-collapse: collapse;
 }
 
-.post-body table thead {
+.mdx-body table thead {
   background-color: #eaeaea;
 }
 
-.post-body table th,
-.post-body table td {
+.mdx-body table th,
+.mdx-body table td {
   padding: 0.2em 0.5em;
 }
 
-.post-body blockquote p code,
-.post-body table code {
+.mdx-body blockquote p code,
+.mdx-body table code {
   background-color: #dadada;
 }
