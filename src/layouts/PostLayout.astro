@@ -15,20 +15,24 @@ const { frontmatter } = Astro.props;
 ---
 
 <MDXLayout {...Astro.props}>
-  <div class="meta-line" slot="meta">
-    <div class="meta-item">
+  <div class="post-meta-line" slot="meta">
+    <div class="post-meta-item">
       <TextWithIcon>
         <CalendarIcon size="1.2em" slot="icon" />
         {new Date(frontmatter.date).toLocaleDateString()}
       </TextWithIcon>
     </div>
-    <div class="meta-item">
+    <div class="post-meta-item">
       <TextWithIcon>
         <BookmarkIcon size="1.2em" slot="icon" />
         {frontmatter.category}
       </TextWithIcon>
     </div>
-    <a class="meta-item" href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank">
+    <a
+      class="post-meta-item"
+      href="https://creativecommons.org/licenses/by-sa/4.0/"
+      target="_blank"
+    >
       <TextWithIcon>
         <CopyrightIcon size="1.2em" slot="icon" />
         CC BY-SA 2.0
@@ -39,7 +43,7 @@ const { frontmatter } = Astro.props;
 </MDXLayout>
 
 <style>
-  .meta-line {
+  .post-meta-line {
     display: flex;
     justify-content: center;
     column-gap: 2em;
@@ -47,13 +51,13 @@ const { frontmatter } = Astro.props;
     color: #646464;
   }
 
-  a.meta-item {
+  a.post-meta-item {
     display: block;
     text-decoration: none;
     color: inherit;
   }
 
-  a.meta-item:hover {
+  a.post-meta-item:hover {
     text-decoration: underline;
   }
 </style>

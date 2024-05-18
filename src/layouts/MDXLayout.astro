@@ -3,8 +3,6 @@ import type { MDXLayoutProps } from "astro";
 
 import BaseLayout from "./BaseLayout.astro";
 
-import "@styles/mdx.css";
-
 type Props = MDXLayoutProps<{
   title: string;
 }>;
@@ -14,8 +12,8 @@ const { frontmatter } = Astro.props;
 
 <BaseLayout title={frontmatter.title + " - Lancern's Home"}>
   <main class="mdx">
-    <header class="header">
-      <h1 class="title">{frontmatter.title}</h1>
+    <header class="mdx-header">
+      <h1 class="mdx-title">{frontmatter.title}</h1>
       <slot name="meta" />
     </header>
     <div class="mdx-body">
@@ -25,13 +23,107 @@ const { frontmatter } = Astro.props;
 </BaseLayout>
 
 <style>
-  .mdx .header {
+  .mdx-header {
     margin-top: 24px;
     margin-bottom: 32px;
   }
 
-  .mdx .title {
+  .mdx-title {
     text-align: center;
     margin-bottom: 12px;
+  }
+</style>
+
+<style is:global>
+  .mdx-body {
+    line-height: 1.6em;
+  }
+
+  .mdx-body h1,
+  .mdx-body h2,
+  .mdx-body h3,
+  .mdx-body h4,
+  .mdx-body h5,
+  .mdx-body h6,
+  .mdx-body p,
+  .mdx-body table,
+  .mdx-body blockquote,
+  .mdx-body pre {
+    margin-top: 2em;
+    margin-bottom: 0;
+  }
+
+  .mdx-body li {
+    margin-top: 0.75em;
+    margin-bottom: 0.75em;
+  }
+
+  .mdx-body hr {
+    border: 0;
+    height: 1px;
+    background-color: #cacaca;
+    margin: 4em 20%;
+  }
+
+  .mdx-body code {
+    font-size: 0.9em;
+    padding: 0.2em 0.4em;
+    background-color: #eaeaea;
+    border-radius: 4px;
+  }
+
+  .mdx-body blockquote {
+    margin-left: 0;
+    margin-right: 0;
+    padding: 1em 1em;
+    background-color: #eaeaea;
+    border-radius: 0 8px 8px 0;
+    border-left: 8px solid #cacaca;
+    color: #646464;
+  }
+
+  .mdx-body blockquote :first-child {
+    margin-top: 0;
+  }
+
+  .mdx-body blockquote :last-child {
+    margin-bottom: 0;
+  }
+
+  .mdx-body pre.astro-code {
+    padding: 1em;
+    border-radius: 8px;
+    line-height: 1.2em;
+  }
+
+  .mdx-body pre.astro-code code {
+    padding: 0;
+    background-color: inherit;
+    border-radius: 0;
+  }
+
+  .mdx-body table {
+    min-width: 100%;
+  }
+
+  .mdx-body table,
+  .mdx-body table th,
+  .mdx-body table td {
+    border: 1px solid black;
+    border-collapse: collapse;
+  }
+
+  .mdx-body table thead {
+    background-color: #eaeaea;
+  }
+
+  .mdx-body table th,
+  .mdx-body table td {
+    padding: 0.2em 0.5em;
+  }
+
+  .mdx-body blockquote p code,
+  .mdx-body table code {
+    background-color: #dadada;
   }
 </style>

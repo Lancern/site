@@ -1,0 +1,26 @@
+---
+import type { IconProps } from "./typing";
+
+interface Props extends IconProps {
+  fill?: string;
+}
+
+const { size, fill } = Astro.props;
+---
+
+<svg
+  class="icon"
+  width={size}
+  height={size}
+  viewBox="0 0 24 24"
+  fill={fill}
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <slot />
+</svg>
+
+<style>
+  .icon {
+    vertical-align: sub;
+  }
+</style>
