@@ -35,7 +35,7 @@ const { frontmatter, url } = Astro.props;
     display: block;
     margin-bottom: 0.4em;
     text-decoration: none;
-    color: black;
+    color: var(--main-color);
     font-size: 1.3em;
     font-weight: bold;
   }
@@ -47,7 +47,8 @@ const { frontmatter, url } = Astro.props;
   .meta-line {
     display: flex;
     column-gap: 2em;
-    color: #646464;
+    color: var(--secondary-color);
+    stroke: var(--secondary-color);
     font-size: 0.9em;
   }
 </style>

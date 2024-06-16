@@ -63,14 +63,14 @@ const { frontmatter } = Astro.props;
   .mdx-body hr {
     border: 0;
     height: 1px;
-    background-color: #cacaca;
+    background-color: var(--hr-color);
     margin: 4em 20%;
   }
 
   .mdx-body code {
     font-size: 0.9em;
     padding: 0.2em 0.4em;
-    background-color: #eaeaea;
+    background-color: var(--post-secondary-bg-color);
     border-radius: 4px;
   }
 
@@ -78,10 +78,10 @@ const { frontmatter } = Astro.props;
     margin-left: 0;
     margin-right: 0;
     padding: 1em 1em;
-    background-color: #eaeaea;
+    background-color: var(--post-secondary-bg-color);
     border-radius: 0 8px 8px 0;
-    border-left: 8px solid #cacaca;
-    color: #646464;
+    border-left: 8px solid var(--post-secondary-bg-color-contrast);
+    color: var(--post-secondary-color);
   }
 
   .mdx-body blockquote :first-child {
@@ -111,12 +111,12 @@ const { frontmatter } = Astro.props;
   .mdx-body table,
   .mdx-body table th,
   .mdx-body table td {
-    border: 1px solid black;
+    border: 1px solid var(--main-color);
     border-collapse: collapse;
   }
 
   .mdx-body table thead {
-    background-color: #eaeaea;
+    background-color: var(--post-secondary-bg-color);
   }
 
   .mdx-body table th,
@@ -126,6 +126,6 @@ const { frontmatter } = Astro.props;
 
   .mdx-body blockquote p code,
   .mdx-body table code {
-    background-color: #dadada;
+    background-color: var(--post-secondary-bg-color-contrast);
   }
 </style>

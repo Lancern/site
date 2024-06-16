@@ -12,8 +12,8 @@ const textListJson = JSON.stringify(textList);
 <style>
   .typewriter {
     font-family: CommitMono, "Monaspace Neon", Menlo, Consolas, "Courier New", Courier, monospace;
-    color: purple;
-    background: #eaeaea;
+    color: var(--typewriter-color);
+    background: var(--secondary-bg-color);
     padding: 0.2em;
     border-radius: 0.2em;
   }
@@ -25,7 +25,7 @@ const textListJson = JSON.stringify(textList);
     top: 0.2em;
     width: 0.2em;
     height: 1.3em;
-    background-color: black;
+    background-color: var(--main-color);
     animation: blink-caret 1s step-end infinite;
   }
 
@@ -35,7 +35,7 @@ const textListJson = JSON.stringify(textList);
       background-color: transparent;
     }
     50% {
-      background-color: black;
+      background-color: var(--main-color);
     }
   }
 </style>
