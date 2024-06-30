@@ -45,15 +45,26 @@ const { frontmatter } = Astro.props;
 <style>
   .post-meta-line {
     display: flex;
-    justify-content: center;
-    column-gap: 2em;
     font-size: 0.9em;
     color: var(--secondary-color);
     stroke: var(--secondary-color);
   }
 
+  @media only screen and (max-width: 480px) {
+    .post-meta-line {
+      flex-direction: column;
+      row-gap: 0.5em;
+    }
+  }
+
+  @media only screen and (min-width: 481px) {
+    .post-meta-line {
+      justify-content: center;
+      column-gap: 2em;
+    }
+  }
+
   a.post-meta-item {
-    display: block;
     text-decoration: none;
     color: inherit;
   }

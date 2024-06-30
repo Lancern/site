@@ -76,12 +76,23 @@ const { frontmatter } = Astro.props;
 
   .mdx-body blockquote {
     margin-left: 0;
-    margin-right: 0;
     padding: 1em 1em;
     background-color: var(--post-secondary-bg-color);
-    border-radius: 0 8px 8px 0;
     border-left: 8px solid var(--post-secondary-bg-color-contrast);
     color: var(--post-secondary-color);
+  }
+
+  @media only screen and (max-width: 480px) {
+    .mdx-body blockquote {
+      margin-right: -16px;
+    }
+  }
+
+  @media only screen and (min-width: 481px) {
+    .mdx-body blockquote {
+      margin-right: 0;
+      border-radius: 0 8px 8px 0;
+    }
   }
 
   .mdx-body blockquote :first-child {
@@ -94,7 +105,6 @@ const { frontmatter } = Astro.props;
 
   .mdx-body pre.astro-code {
     padding: 1em;
-    border-radius: 8px;
     line-height: 1.2em;
   }
 
@@ -102,6 +112,19 @@ const { frontmatter } = Astro.props;
     padding: 0;
     background-color: inherit;
     border-radius: 0;
+  }
+
+  @media only screen and (max-width: 480px) {
+    .mdx-body pre.astro-code {
+      margin-left: -16px;
+      margin-right: -16px;
+    }
+  }
+
+  @media only screen and (min-width: 481px) {
+    .mdx-body pre.astro-code {
+      border-radius: 8px;
+    }
   }
 
   .mdx-body table {

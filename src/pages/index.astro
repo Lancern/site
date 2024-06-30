@@ -25,7 +25,7 @@ const keywords = [
       <img class="identity-avatar" src="/avatar.jpeg" height="64" width="64" />
       <span class="identity-name">Lancern</span>
     </div>
-    <div class="description-line">
+    <div class="description-line hide-on-phones">
       <p>
         I'm a
         <TypeWriter textList={keywords} />
@@ -62,14 +62,23 @@ const keywords = [
 </BaseLayout>
 
 <style>
-  .home {
-    padding: 8rem 0;
+  @media only screen and (max-width: 480px) {
+    .home {
+      padding: 3rem 0;
+    }
+  }
+
+  @media only screen and (min-width: 481px) {
+    .home {
+      padding: 8rem 0;
+    }
   }
 
   .identity-line {
     display: flex;
     justify-content: center;
     align-items: center;
+    margin-bottom: 1.6rem;
   }
 
   .identity-avatar {
@@ -92,7 +101,22 @@ const keywords = [
 
   .nav-line {
     display: flex;
-    justify-content: center;
+    margin-top: 1.6rem;
+  }
+
+  @media only screen and (max-width: 480px) {
+    .nav-line {
+      flex-direction: column;
+      align-items: center;
+    }
+  }
+
+  @media only screen and (min-width: 481px) {
+    .nav-line {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
   }
 
   .nav-link {

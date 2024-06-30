@@ -27,3 +27,27 @@
     --typewriter-color: #b000b0;
   }
 }
+
+@media only screen and (max-width: 480px) {
+  /* Styles on Phone screens */
+
+  .hide-on-phones {
+    display: none !important;
+  }
+
+  .hide-on-tablets {
+    display: none !important;
+  }
+}
+
+@media only screen and (min-width: 481px) and (max-width: 768px) {
+  /* Styles on tablet and iPad screens */
+
+  .hide-on-tablets {
+    display: none !important;
+  }
+}
+
+@media only screen and (min-width: 769px) {
+  /* Styles on desktop screens */
+}

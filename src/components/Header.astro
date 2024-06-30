@@ -14,9 +14,20 @@
 <style>
   .header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
     height: 80px;
+  }
+
+  @media only screen and (max-width: 480px) {
+    .header {
+      justify-content: center;
+    }
+  }
+
+  @media only screen and (min-width: 481px) {
+    .header {
+      justify-content: space-between;
+    }
   }
 
   .header-identity {
@@ -36,8 +47,16 @@
     margin-left: 10px;
   }
 
-  .header-nav {
-    display: flex;
+  @media only screen and (max-width: 480px) {
+    .header-nav {
+      display: none;
+    }
+  }
+
+  @media only screen and (min-width: 481px) {
+    .header-nav {
+      display: flex;
+    }
   }
 
   .header-nav-item {

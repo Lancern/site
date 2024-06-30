@@ -34,6 +34,18 @@ import Container from "@components/Container.astro";
 
   .footer-main {
     display: flex;
-    justify-content: space-between;
+  }
+
+  @media only screen and (max-width: 480px) {
+    .footer-main {
+      flex-direction: column;
+    }
+  }
+
+  @media only screen and (min-width: 481px) {
+    .footer-main {
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
   }
 </style>
