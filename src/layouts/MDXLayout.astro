@@ -2,6 +2,7 @@
 import type { MDXLayoutProps } from "astro";
 
 import BaseLayout from "./BaseLayout.astro";
+import Giscus from "@components/Giscus.astro";
 
 type Props = MDXLayoutProps<{
   title: string;
@@ -20,6 +21,9 @@ const { frontmatter } = Astro.props;
       <slot />
     </div>
   </main>
+  <div class="giscus-container">
+    <Giscus />
+  </div>
 </BaseLayout>
 
 <style>
@@ -31,6 +35,10 @@ const { frontmatter } = Astro.props;
   .mdx-title {
     text-align: center;
     margin-bottom: 12px;
+  }
+
+  .giscus-container {
+    margin-top: 2em;
   }
 </style>
 
