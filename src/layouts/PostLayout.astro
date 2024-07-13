@@ -8,10 +8,13 @@ import CopyrightIcon from "@components/icon/CopyrightIcon.astro";
 import TextWithIcon from "@components/TextWithIcon.astro";
 
 import type { PostFrontmatter } from "@scripts/posts";
+import Tag from "@components/Tag.astro";
 
 type Props = MDXLayoutProps<PostFrontmatter>;
 
 const { frontmatter } = Astro.props;
+
+const tags = frontmatter.tags ?? [];
 ---
 
 <MDXLayout {...Astro.props}>
@@ -40,6 +43,9 @@ const { frontmatter } = Astro.props;
     </a>
   </div>
   <slot />
+  <div class="tags-line" slot="footer">
+    {tags.map((t) => <Tag name={t} />)}
+  </div>
 </MDXLayout>
 
 <style>
@@ -71,5 +77,10 @@ const { frontmatter } = Astro.props;
 
   a.post-meta-item:hover {
     text-decoration: underline;
+  }
+
+  .tags-line {
+    display: flex;
+    column-gap: 0.5em;
   }
 </style>

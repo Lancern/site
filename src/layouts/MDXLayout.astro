@@ -21,6 +21,9 @@ const { frontmatter } = Astro.props;
       <slot />
     </div>
   </main>
+  <div class="mdx-footer">
+    <slot name="footer" />
+  </div>
   <div class="giscus-container">
     <Giscus />
   </div>
@@ -38,6 +41,10 @@ const { frontmatter } = Astro.props;
   }
 
   .giscus-container {
+    margin-top: 2em;
+  }
+
+  .mdx-footer {
     margin-top: 2em;
   }
 </style>
