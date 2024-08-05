@@ -36,7 +36,7 @@ def _parse_args():
 
 
 def _new(args):
-    if "date" in args:
+    if args.date is not None:
         try:
             date = Date.fromisoformat(args.date)
         except ValueError:
