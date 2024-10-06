@@ -6,6 +6,7 @@ import InfoIcon from "@components/icon/InfoIcon.astro";
 import PeopleIcon from "@components/icon/PeopleIcon.astro";
 import TextWithIcon from "@components/TextWithIcon.astro";
 import GithubIcon from "@components/icon/GithubIcon.astro";
+import ChartIcon from "@components/icon/ChartIcon.astro";
 
 const keywords = [
   "C/C++",
@@ -37,6 +38,12 @@ const keywords = [
         <TextWithIcon>
           <ArchiveIcon size="1.2em" slot="icon" />
           <span class="nav-link-text">Posts</span>
+        </TextWithIcon>
+      </a>
+      <a class="nav-link" href="https://chan.lancern.xyz">
+        <TextWithIcon>
+          <ChartIcon size="1.2em" slot="icon" />
+          <span class="nav-link-text">Channel</span>
         </TextWithIcon>
       </a>
       <a class="nav-link" href="/about">
