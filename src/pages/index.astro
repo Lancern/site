@@ -7,6 +7,7 @@ import PeopleIcon from "@components/icon/PeopleIcon.astro";
 import TextWithIcon from "@components/TextWithIcon.astro";
 import GithubIcon from "@components/icon/GithubIcon.astro";
 import ChartIcon from "@components/icon/ChartIcon.astro";
+import LightbulbIcon from "@components/icon/LightbulbIcon.astro"
 
 const keywords = [
   "C/C++",
@@ -46,6 +47,18 @@ const keywords = [
           <span class="nav-link-text">Channel</span>
         </TextWithIcon>
       </a>
+      <a class="nav-link" href="/activities">
+        <TextWithIcon>
+          <LightbulbIcon size="1.2em" slot="icon" />
+          <span class="nav-link-text">Activities</span>
+        </TextWithIcon>
+      </a>
+      <a class="nav-link" href="https://github.com/Lancern" target="_blank">
+        <TextWithIcon>
+          <GithubIcon size="1.2em" slot="icon" />
+          <span class="nav-link-text">GitHub</span>
+        </TextWithIcon>
+      </a>
       <a class="nav-link" href="/about">
         <TextWithIcon>
           <InfoIcon size="1.2em" slot="icon" />
@@ -56,12 +69,6 @@ const keywords = [
         <TextWithIcon>
           <PeopleIcon size="1.2em" slot="icon" />
           <span class="nav-link-text">Friends</span>
-        </TextWithIcon>
-      </a>
-      <a class="nav-link" href="https://github.com/Lancern" target="_blank">
-        <TextWithIcon>
-          <GithubIcon size="1.2em" slot="icon" />
-          <span class="nav-link-text">GitHub</span>
         </TextWithIcon>
       </a>
     </div>
