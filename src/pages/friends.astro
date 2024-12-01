@@ -1,0 +1,67 @@
+---
+import BaseLayout from "@layouts/BaseLayout.astro";
+import FriendCard from "@components/FriendCard.astro";
+---
+
+<BaseLayout title="Friends - Lancern's Home">
+  <div class="friends">
+    <FriendCard
+      name="Asuna"
+      avatar="/friend-avatars/Asuna.jpg"
+      link="https://github.com/SpriteOvO/"
+    />
+    <FriendCard
+      name="cyyself"
+      avatar="/friend-avatars/cyyself.jpg"
+      link="https://blog.cyyself.name/"
+    />
+    <FriendCard
+      name="kxxt"
+      avatar="/friend-avatars/kxxt.jpg"
+      link="https://www.kxxt.dev/"
+    />
+    <FriendCard
+      name="MiaoTony"
+      avatar="/friend-avatars/MiaoTony.jpg"
+      link="https://miaotony.xyz/"
+    />
+    <FriendCard
+      name="QuarticCat"
+      avatar="/friend-avatars/QuarticCat.jpg"
+      link="https://blog.quarticcat.com/"
+    />
+    <FriendCard
+      name="SchrodingerZHU"
+      avatar="/friend-avatars/SchrodingerZHU.jpg"
+      link="https://zhuyi.fan/"
+    />
+    <FriendCard
+      name="twd2"
+      avatar="/friend-avatars/twd2.jpg"
+      link="https://twd2.me/"
+    />
+  </div>
+
+  <div class="footnotes">
+    <p class="footnote">* The list is sorted in alphabetical order.</p>
+    <p class="footnote">** Contact me if you want to join this list.</p>
+  </div>
+</BaseLayout>
+
+<style>
+  .friends {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+  }
+
+  .footnotes {
+    color: var(--secondary-color);
+    font-size: 0.7rem;
+    margin-top: 1rem;
+  }
+
+  .footnote {
+    margin: 0.2rem 0;
+  }
+</style>

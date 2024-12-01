@@ -1,0 +1,58 @@
+---
+interface Props {
+  name: string;
+  avatar: string;
+  link: string;
+}
+
+const { name, avatar, link } = Astro.props;
+---
+
+<a class="friend" href={link} target="_blank">
+  <img class="friend-avatar" src={avatar} />
+  <div class="friend-info">
+    <h2 class="friend-name">{name}</h2>
+    <p class="friend-link">{link}</p>
+  </div>
+</a>
+
+<style>
+  .friend {
+    display: flex;
+    border: 2px solid var(--secondary-bg-color);
+    border-radius: 6px;
+    text-decoration: none;
+    overflow: hidden;
+  }
+
+  .friend:hover {
+    color: inherit;
+    border: 2px solid var(--link-hover-color);
+  }
+
+  .friend:focus {
+    color: inherit;
+  }
+
+  .friend-avatar {
+    width: 100px;
+    height: 100px;
+    z-index: -100;
+  }
+
+  .friend-info {
+    margin: 1rem;
+  }
+
+  .friend-name {
+    font-size: 1.1rem;
+    font-weight: bold;
+    margin: 0;
+  }
+
+  .friend-link {
+    color: var(--secondary-color);
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
+  }
+</style>
