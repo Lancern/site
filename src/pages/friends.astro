@@ -51,8 +51,19 @@ import FriendCard from "@components/FriendCard.astro";
 <style>
   .friends {
     display: flex;
-    flex-wrap: wrap;
     gap: 0.5rem 1rem;
+  }
+
+  @media only screen and (max-width: 480px) {
+    .friends {
+      flex-direction: column;
+    }
+  }
+
+  @media only screen and (min-width: 481px) {
+    .friends {
+      flex-wrap: wrap;
+    }
   }
 
   .footnotes {
