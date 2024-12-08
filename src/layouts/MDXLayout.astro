@@ -71,8 +71,14 @@ const { frontmatter } = Astro.props;
   }
 
   .mdx-body li {
-    margin-top: 0.75em;
-    margin-bottom: 0.75em;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+  }
+
+  .mdx-body li > ol,
+  .mdx-body li > ul {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
   }
 
   .mdx-body hr {

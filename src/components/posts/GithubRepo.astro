@@ -1,0 +1,27 @@
+---
+import GithubIcon from '@components/icon/GithubIcon.astro';
+
+interface Props {
+  user: string;
+  repo: string;
+  url?: string;
+}
+
+let {user, repo, url} = Astro.props;
+if (url === undefined) {
+  url = `https://github.com/${user}/${repo}/`;
+}
+---
+
+<span class="github-repo-link">
+  <GithubIcon size="1em" />
+  <a href={url} target="_blank">
+    {user}/{repo}
+  </a>
+</span>
+
+<style>
+  .github-repo-link {
+    stroke: var(--main-color);
+  }
+</style>
