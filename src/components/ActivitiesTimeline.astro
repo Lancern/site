@@ -1,0 +1,86 @@
+---
+import PullRequestViewActivity from "@components/activities/PullRequestViewActivity.astro";
+import type { Activity, ActivityArray } from "@scripts/activities";
+
+interface Props {
+  activities: ActivityArray;
+}
+
+const { activities } = Astro.props;
+---
+
+<div class="activities">
+  <!-- TODO: remove the "activity" div below after all activity type has been supported  -->
+  <!-- TODO: add timeline UI element  -->
+  {
+    activities.map((act) => (
+      <div class="activity">
+        {((act: Activity) => {
+          const userName = act.actor.login;
+          const repoName = act.repo.name;
+
+          switch (act.type) {
+            case "CommitCommentEvent":
+              return `${userName} commented on a commit in ${repoName}`;
+
+            case "CreateEvent":
+              return `${userName} created a new branch or tag in ${repoName}`;
+
+            case "DeleteEvent":
+              return `${userName} deleted a branch or tag in ${repoName}`;
+
+            case "ForkEvent":
+              return `${userName} forked the repository ${repoName}`;
+
+            case "GollumEvent":
+              return `${userName} created or updated a wiki page in ${repoName}`;
+
+            case "IssueCommentEvent":
+              return `${userName} commented to an issue or pull request in ${repoName}`;
+
+            case "IssuesEvent":
+              return `${userName} opened a new issue in ${repoName}`;
+
+            case "MemberEvent":
+              return `${userName} becomes a collaborator of ${repoName}`;
+
+            case "PublicEvent":
+              return `${userName} made the repository ${repoName} public`;
+
+            case "PullRequestEvent":
+              return `${userName} opened a new pull request in ${repoName}`;
+
+            case "PullRequestReviewEvent":
+              return <PullRequestViewActivity activity={act} />;
+
+            case "PullRequestReviewCommentEvent":
+              return `${userName} commented to a pull request review in ${repoName}`;
+
+            case "PushEvent":
+              return `${userName} pushed a new commit to ${repoName}`;
+
+            case "ReleaseEvent":
+              return `${userName} created a new release in ${repoName}`;
+
+            case "SponsorshipEvent":
+              return `${userName} made a new sponsorship`;
+
+            case "WatchEvent":
+              return `${userName} stared the repository ${repoName}`;
+
+            default:
+              return "Unknown activity";
+          }
+        })(act)}
+      </div>
+    ))
+  }
+</div>
+
+<style>
+  .activities {
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+  }
+</style>

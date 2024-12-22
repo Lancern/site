@@ -1,0 +1,21 @@
+---
+interface Props {
+  login: string;
+  url?: string;
+}
+
+const { login, url } = Astro.props;
+const userUrl = url ?? `https://github.com/${login}`;
+---
+
+<a class="github-user-link" href={userUrl} target="_blank">
+  {login}
+</a>
+
+<style>
+  .github-user-link {
+    color: var(--main-color);
+    font-weight: bold;
+    text-decoration: none;
+  }
+</style>

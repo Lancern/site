@@ -10,6 +10,8 @@
   --post-secondary-bg-color: #eaeaea;
   --post-secondary-bg-color-contrast: #cacaca;
   --typewriter-color: #800080;
+  --card-border-color: #bbbbbb;
+  --card-header-bg-color: #eeeeee;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -25,6 +27,8 @@
     --post-secondary-bg-color: #303030;
     --post-secondary-bg-color-contrast: #505050;
     --typewriter-color: #b000b0;
+    --card-border-color: #444444;
+    --card-header-bg-color: #333333;
   }
 }
 

@@ -1,0 +1,21 @@
+---
+interface Props {
+  name: string;
+  url?: string;
+}
+
+const {name, url} = Astro.props;
+const repoUrl = url ?? `https://github.com/${name}/`;
+---
+
+<a class="github-repo-link" href={repoUrl} target="_blank">
+  {name}
+</a>
+
+<style>
+  .github-repo-link {
+    color: var(--main-color);
+    font-weight: bold;
+    text-decoration: none;
+  }
+</style>

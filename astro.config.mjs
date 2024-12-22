@@ -1,5 +1,6 @@
 import { defineConfig } from "astro/config";
 import mdx from "@astrojs/mdx";
+import vercel from "@astrojs/vercel/serverless";
 import rehypeMathjax from "rehype-mathjax";
 import remarkMath from "remark-math";
 
@@ -11,4 +12,11 @@ export default defineConfig({
     remarkPlugins: [remarkMath],
     rehypePlugins: [rehypeMathjax],
   },
+  output: "hybrid",
+  adapter: vercel({
+    isr: {
+      // Vercel will cache each on-demand rendering page for 10 minutes.
+      expiration: 10,
+    },
+  }),
 });
