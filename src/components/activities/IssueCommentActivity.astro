@@ -1,0 +1,36 @@
+---
+import ActivityItem from "@components/activities/ActivityItem.astro";
+import GithubUser from "@components/activities/GithubUser.astro";
+import GithubIssue from "@components/activities/GithubIssue.astro";
+import GithubRepo from "@components/activities/GithubRepo.astro";
+import IssueInfo from "@components/activities/IssueInfo.astro";
+import type { Activity } from "@scripts/activities";
+
+interface Props {
+  activity: Activity;
+}
+
+const { activity } = Astro.props;
+
+const userName = activity.actor.login;
+const userUrl = activity.actor.url;
+
+const repoName = activity.repo.name;
+const repoUrl = activity.repo.url;
+
+const issue = (activity.payload as any).issue;
+const issueNumber: number = issue.number;
+const issueTitle: string = issue.title;
+const issueUrl: string = issue.url;
+---
+
+<ActivityItem timestamp={activity.created_at!}>
+  <span slot="title">
+    <GithubUser login={userName} url={userUrl} />
+    commented to issue
+    <GithubIssue number={issueNumber} url={issueUrl} />
+    in the repository
+    <GithubRepo name={repoName} url={repoUrl} />
+  </span>
+  <IssueInfo repoName={repoName} issueNumber={issueNumber} issueTitle={issueTitle} />
+</ActivityItem>

@@ -1,4 +1,6 @@
 ---
+import ActivityContent from './ActivityContent.astro';
+
 interface Props {
   repoName: string;
   prNumber: number;
@@ -8,12 +10,12 @@ interface Props {
 const { repoName, prNumber, prTitle } = Astro.props;
 ---
 
-<div class="github-pr-info">
+<ActivityContent>
   <h4 class="github-repo-name">{repoName}</h4>
   <h3 class="github-pr-title">
     #{prNumber}: {prTitle}
   </h3>
-</div>
+</ActivityContent>
 
 <style>
   .github-repo-name {

@@ -1,0 +1,72 @@
+---
+interface Props {
+  timestamp: string;
+}
+
+const { timestamp } = Astro.props;
+const time = new Date(timestamp);
+const now = new Date();
+
+const fullTime = time.toLocaleString();
+const displayTime =
+  time.toDateString() === now.toDateString()
+    ? time.toLocaleTimeString()
+    : time.toLocaleDateString();
+---
+
+<div class="activity">
+  <div class="activity-header">
+    <div class="activity-timeline-dot"></div>
+    <div class="activity-time-box">
+      <abbr class="activity-time" title={fullTime}>{displayTime}</abbr>
+    </div>
+  </div>
+  <div class="activity-body">
+    <h2 class="activity-title">
+      <slot name="title" />
+    </h2>
+    <slot />
+  </div>
+</div>
+
+<style>
+  .activity {
+    padding: 0 1em;
+  }
+
+  .activity-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+  }
+
+  .activity-timeline-dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--timeline-dot-color);
+    border-radius: 8px;
+  }
+
+  .activity-time {
+    color: var(--secondary-color);
+    text-decoration: none;
+    font-size: 0.9em;
+  }
+
+  .activity-body {
+    margin-top: -4px;
+    margin-left: 3px;
+    border-left: 2px solid var(--timeline-color);
+    padding: 1.5em 1em;
+    padding-top: calc(1.5em + 4px);
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+  }
+
+  .activity-title {
+    font-size: 1em;
+    font-weight: normal;
+    margin: 0;
+  }
+</style>

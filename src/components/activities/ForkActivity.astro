@@ -1,0 +1,32 @@
+---
+import ActivityItem from "@components/activities/ActivityItem.astro";
+import GithubUser from "@components/activities/GithubUser.astro";
+import GithubRepo from "@components/activities/GithubRepo.astro";
+import type { Activity } from "@scripts/activities";
+
+interface Props {
+  activity: Activity;
+}
+
+const { activity } = Astro.props;
+
+const userName = activity.actor.login;
+const userUrl = activity.actor.url;
+
+const repoName = activity.repo.name;
+const repoUrl = activity.repo.url;
+
+const forkedRepoName = (activity.payload as any).forkee.full_name;
+const forkedRepoUrl = (activity.payload as any).forkee.html_url;
+---
+
+<ActivityItem timestamp={activity.created_at!}>
+  <span slot="title">
+    <GithubUser login={userName} url={userUrl} />
+    forked the repository
+    <GithubRepo name={forkedRepoName} url={forkedRepoUrl} />
+    into
+    <GithubRepo name={repoName} url={repoUrl} />
+  </span>
+  <!-- TODO: display more information about the forked repository -->
+</ActivityItem>

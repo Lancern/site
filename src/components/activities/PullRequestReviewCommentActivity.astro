@@ -1,10 +1,10 @@
 ---
-import ActivityCard from "@components/activities/ActivityCard.astro";
+import ActivityItem from "@components/activities/ActivityItem.astro";
 import GithubUser from "@components/activities/GithubUser.astro";
 import GithubPullRequest from "@components/activities/GithubPullRequest.astro";
 import GithubRepo from "@components/activities/GithubRepo.astro";
+import PullRequestInfo from "@components/activities/PullRequestInfo.astro";
 import type { Activity } from "@scripts/activities";
-import PullRequestInfo from "./PullRequestInfo.astro";
 
 interface Props {
   activity: Activity;
@@ -15,22 +15,22 @@ const { activity } = Astro.props;
 const userName = activity.actor.login;
 const userUrl = activity.actor.url;
 
+const repoName = activity.repo.name;
+const repoUrl = activity.repo.url;
+
 const pr = (activity.payload as any).pull_request;
 const prNumber: number = pr.number;
 const prTitle: string = pr.title;
 const prUrl: string = pr.url;
-
-const repoName = activity.repo.name;
-const repoUrl = activity.repo.url;
 ---
 
-<ActivityCard timestamp={activity.created_at!}>
+<ActivityItem timestamp={activity.created_at!}>
   <span slot="title">
     <GithubUser login={userName} url={userUrl} />
-    reviewed pull request
+    commented to a review in pull request
     <GithubPullRequest number={prNumber} url={prUrl} />
     in the repository
     <GithubRepo name={repoName} url={repoUrl} />
   </span>
   <PullRequestInfo repoName={repoName} prNumber={prNumber} prTitle={prTitle} />
-</ActivityCard>
+</ActivityItem>
