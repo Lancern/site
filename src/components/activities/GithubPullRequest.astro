@@ -1,10 +1,11 @@
 ---
 interface Props {
+  repo: string;
   number: number;
-  url: string;
 }
 
-const { number, url } = Astro.props
+const { repo, number } = Astro.props;
+const url = `https://github.com/${repo}/pull/${number}/`;
 ---
 
 <a class="github-pr-link" href={url} target="_blank">

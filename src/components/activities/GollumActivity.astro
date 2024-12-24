@@ -9,18 +9,14 @@ interface Props {
 }
 
 const { activity } = Astro.props;
-
 const userName = activity.actor.login;
-const userUrl = activity.actor.url;
-
 const repoName = activity.repo.name;
-const repoUrl = activity.repo.url;
 ---
 
 <ActivityItem timestamp={activity.created_at!}>
   <span slot="title">
-    <GithubUser login={userName} url={userUrl} />
+    <GithubUser login={userName} />
     updated wiki pages in the repository
-    <GithubRepo name={repoName} url={repoUrl} />
+    <GithubRepo name={repoName} />
   </span>
 </ActivityItem>

@@ -1,14 +1,13 @@
 ---
 interface Props {
   login: string;
-  url?: string;
 }
 
-const { login, url } = Astro.props;
-const userUrl = url ?? `https://github.com/${login}`;
+const { login } = Astro.props;
+const url = `https://github.com/${login}/`;
 ---
 
-<a class="github-user-link" href={userUrl} target="_blank">
+<a class="github-user-link" href={url} target="_blank">
   {login}
 </a>
 
