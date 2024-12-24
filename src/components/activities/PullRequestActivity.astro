@@ -16,30 +16,30 @@ const repoName = activity.repo.name;
 
 const message = (() => {
   switch (activity.payload.action) {
-  case "opened":
-    return "opened pull request";
-  case "edited":
-    return "edited pull request";
-  case "closed":
-    return "closed pull request";
-  case "reopened":
-    return "reopened pull request";
-  case "assigned":
-    return "assigned pull request";
-  case "unassigned":
-    return "unassigned pull request";
-  case "review_requested":
-    return "requested review for pull request";
-  case "review_request_removed":
-    return "removed review request for pull request";
-  case "labeled":
-    return "labeled pull request";
-  case "unlabeled":
-    return "unlabeled pull request";
-  case "synchronize":
-    return "synchronized pull request";
-  default:
-    return "had activities related to pull request";
+    case "opened":
+      return "opened pull request";
+    case "edited":
+      return "edited pull request";
+    case "closed":
+      return "closed pull request";
+    case "reopened":
+      return "reopened pull request";
+    case "assigned":
+      return "assigned pull request";
+    case "unassigned":
+      return "unassigned pull request";
+    case "review_requested":
+      return "requested review for pull request";
+    case "review_request_removed":
+      return "removed review request for pull request";
+    case "labeled":
+      return "labeled pull request";
+    case "unlabeled":
+      return "unlabeled pull request";
+    case "synchronize":
+      return "synchronized pull request";
+    default:
+      return "had activities related to pull request";
   }
 })();
 

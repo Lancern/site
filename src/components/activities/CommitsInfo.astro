@@ -1,0 +1,77 @@
+---
+import ActivityContent from "./ActivityContent.astro";
+
+interface CommitInfo {
+  hash: string;
+  message: string;
+  author: string;
+}
+
+interface Props {
+  repo: string;
+  commits: CommitInfo[];
+}
+
+const { repo, commits } = Astro.props;
+
+function getCommitUrl(repo: string, commitHash: string): string {
+  return `https://github.com/${repo}/commit/${commitHash}/`;
+}
+
+function getShortHash(commitHash: string): string {
+  return commitHash.substring(0, 6);
+}
+
+function getShortMessage(message: string): string {
+  if (message.length <= 80) {
+    return message;
+  }
+
+  const newlinePosition = message.indexOf("\n");
+  if (newlinePosition !== -1 && newlinePosition <= 80) {
+    return message.substring(0, newlinePosition);
+  }
+
+  return message.substring(0, 77) + "...";
+}
+---
+
+<ActivityContent>
+  <h4 class="github-repo-name">{repo}</h4>
+  <div class="commit-list">
+    {commits.map(({hash, message, author}) => (
+      <div class="commit">
+        <a class="commit-hash" href={getCommitUrl(repo, hash)} target="_blank">
+          #{getShortHash(hash)}
+        </a>
+        -
+        <span class="commit-message">{getShortMessage(message)}</span>
+        <span class="commit-author">by {author}</span>
+      </div>
+    ))}
+  </div>
+</ActivityContent>
+
+<style>
+  .github-repo-name {
+    font-size: 0.8em;
+    font-weight: normal;
+    color: var(--secondary-color);
+    margin: 0.2em 0;
+  }
+
+  .commit {
+    margin-top: 0.2em;
+    font-size: 0.95em;
+  }
+
+  .commit-hash {
+    text-decoration: none;
+    font-weight: bold;
+  }
+
+  .commit-author {
+    font-size: 0.9em;
+    color: var(--secondary-color);
+  }
+</style>

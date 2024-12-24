@@ -3,7 +3,7 @@ interface Props {
   name: string;
 }
 
-const {name} = Astro.props;
+const { name } = Astro.props;
 const url = `https://github.com/${name}/`;
 ---
 
@@ -13,7 +13,6 @@ const url = `https://github.com/${name}/`;
 
 <style>
   .github-repo-link {
-    color: var(--main-color);
     font-weight: bold;
     text-decoration: none;
   }

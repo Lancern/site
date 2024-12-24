@@ -16,24 +16,24 @@ const repoName = activity.repo.name;
 
 const message = (() => {
   switch (activity.payload.action) {
-  case "opened":
-    return "opened issue";
-  case "edited":
-    return "edited issue";
-  case "closed":
-    return "closed issue";
-  case "reopened":
-    return "reopened issue";
-  case "assigned":
-    return "assigned issue";
-  case "unassigned":
-    return "unassigned issue";
-  case "labeled":
-    return "labeled issue";
-  case "unlabeled":
-    return "unlabeled issue";
-  default:
-    return "had activities related to issue";
+    case "opened":
+      return "opened issue";
+    case "edited":
+      return "edited issue";
+    case "closed":
+      return "closed issue";
+    case "reopened":
+      return "reopened issue";
+    case "assigned":
+      return "assigned issue";
+    case "unassigned":
+      return "unassigned issue";
+    case "labeled":
+      return "labeled issue";
+    case "unlabeled":
+      return "unlabeled issue";
+    default:
+      return "had activities related to issue";
   }
 })();
 

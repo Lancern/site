@@ -1,5 +1,6 @@
 ---
 import ActivityItem from "@components/activities/ActivityItem.astro";
+import CommitsInfo from "@components/activities/CommitsInfo.astro";
 import GithubUser from "@components/activities/GithubUser.astro";
 import GithubRepo from "@components/activities/GithubRepo.astro";
 import type { Activity } from "@scripts/activities";
@@ -14,6 +15,14 @@ const repoName = activity.repo.name;
 
 const numCommits = (activity.payload as any).distinct_size;
 const gitRef = (activity.payload as any).ref;
+
+const commits = (activity.payload as any).commits
+  .filter((commit: any) => commit.distinct)
+  .map((commit: any) => ({
+    hash: commit.sha,
+    message: commit.message,
+    author: commit.author.name,
+  }));
 ---
 
 <ActivityItem timestamp={activity.created_at!}>
@@ -22,4 +31,5 @@ const gitRef = (activity.payload as any).ref;
     pushed {numCommits} commit(s) to {gitRef} in repository
     <GithubRepo name={repoName} />
   </span>
+  <CommitsInfo repo={repoName} commits={commits} />
 </ActivityItem>

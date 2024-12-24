@@ -29,8 +29,8 @@ import Image from "@components/posts/Image.astro";
 - 程序可以动态地向 `std::hive` 中增加对象，可以动态地从 `std::hive` 中删除对象。`std::hive` 是一个带所有权的容器，在其析构时会同时析构其中包含的所有对象。增加或删除单个对象的时间复杂度均为 $O\left(1\right)$ 。
 - `std::hive` 支持遍历操作。`std::hive` 的迭代器是双向迭代器，不支持随机访问。`std::hive` 中的对象是无序的，也就是遍历对象的顺序是不确定的，和插入对象的顺序无关。迭代器前进或后退一步的时间复杂度均为 $O\left(1\right)$ 。
 - `std::hive` 中包含的所有对象的地址都是固定的。也就是说：
-    - 在向 `std::hive` 中插入新对象时，保证所有指向已有对象的指针和迭代器都不会失效。
-    - 在从 `std::hive` 中移除对象时，除了指向被移除的对象的指针和迭代器外，保证所有指向其他对象的指针和迭代器都不会失效。
+  - 在向 `std::hive` 中插入新对象时，保证所有指向已有对象的指针和迭代器都不会失效。
+  - 在从 `std::hive` 中移除对象时，除了指向被移除的对象的指针和迭代器外，保证所有指向其他对象的指针和迭代器都不会失效。
 
 下面将对 `std::hive` 的实现方法进行介绍。
 
@@ -47,23 +47,17 @@ import Image from "@components/posts/Image.astro";
 
 为了提升空间局部性，`std::hive` 会将对象组织到尽可能连续的内存空间中。在 `std::hive` 内部，存储若干空间上连续的对象的结构称为*块*（block）。下图展示了一个拥有一个块的 `std::hive`：
 
-<Image
-    src="/images/posts/2024/12/std-hive/one-block-hive.svg"
-    alt="One Block Hive" />
+<Image src="/images/posts/2024/12/std-hive/one-block-hive.svg" alt="One Block Hive" />
 
 上图中展示的块的*容量*（capacity）为 4，即这个块中一共可容纳 4 个空间上连续的对象。这个块中已经存放了 3 个对象，以蓝色方框进行标记。剩余的一个以白色方框标记的空间为空闲空间，可容纳一个新对象。
 
 如果在块已满时需要向 `std::hive` 中插入新对象，`std::hive` 会分配一个新的块用于存放新对象。块的容量会呈指数增长，这样可以减少块的分配次数，提升性能。属于同一个 `std::hive` 的多个块使用链表连接起来。下图展示了一个块容量增长倍数为 2 的、拥有两个块的 `std::hive`：
 
-<Image
-    src="/images/posts/2024/12/std-hive/two-block-hive.svg"
-    alt="Two Block Hive" />
+<Image src="/images/posts/2024/12/std-hive/two-block-hive.svg" alt="Two Block Hive" />
 
 从 `std::hive` 中删除一个元素后，如果块中的对象数量变为 0，那么这个块将被从块链表中移除并释放。另外，在删除一个元素后，空间上原本连续存放的多个对象可能变得不连续，他们之间可能会出现“空泡”。下图展示了一种可能的情况：
 
-<Image
-    src="/images/posts/2024/12/std-hive/free-slots.svg"
-    alt="Free Slots" />
+<Image src="/images/posts/2024/12/std-hive/free-slots.svg" alt="Free Slots" />
 
 “空泡”的存在给插入和遍历操作都带来了麻烦。对于插入操作，我们希望在插入新对象时应尽可能复用已有的“空泡”所占用的空间，减少额外的内存分配和内存占用。此外，我们仍然希望能够在 $O\left(1\right)$ 的时间内找到可用的“空泡”。对于遍历操作，我们希望能在遍历时快速地跳过这些“空泡”，使得前进或后退一步的时间复杂度仍为 $O\left(1\right)$ 。为了实现这些目标，`std::hive` 需要额外两个数据结构，第一个结构名为*空闲链表*（free list），另一个结构名为*跳跃域*（skip field）。这两个结构相辅相成，可以说是 `std::hive` 的核心设计。
 
@@ -71,9 +65,7 @@ import Image from "@components/posts/Image.astro";
 
 跳跃域是一个块级结构，即每个块都有一个跳跃域。一个跳跃域是一个整数数组，其长度和块的容量一致。跳跃域中的每个元素都和块中的每个对象或“空泡”形成一一对应关系，下图展示了前面的图示中的两个块的跳跃域：
 
-<Image
-    src="/images/posts/2024/12/std-hive/skipfield.svg"
-    alt="Skipfield" />
+<Image src="/images/posts/2024/12/std-hive/skipfield.svg" alt="Skipfield" />
 
 我将某些跳跃域的元素标记为了“-”是因为这些跳跃域中的值没有意义，不会影响 `std::hive` 的操作。只有对象所对应的跳跃域元素、以及每个连续“空泡”的第一个和最后一个“空泡”所对应的跳跃域元素是有意义的，连续“空泡”内部的跳跃域元素没有意义。对象所对应的跳跃域元素均为 0，而“空泡”所对应的跳跃域元素为连续“空泡”的长度。
 
@@ -87,15 +79,11 @@ import Image from "@components/posts/Image.astro";
 
 首先，`std::hive` 会使用一个单独的链表将所有包含“空泡”的块链接起来，如下图中的红色链接所示：
 
-<Image
-    src="/images/posts/2024/12/std-hive/free-block-link.svg"
-    alt="Free block link" />
+<Image src="/images/posts/2024/12/std-hive/free-block-link.svg" alt="Free block link" />
 
 在所有有“空泡”的块内部，`std::hive` 也会使用一个链表将所有连续的“空泡”的第一个“空泡”链接起来，如下图中的紫色链接所示：
 
-<Image
-    src="/images/posts/2024/12/std-hive/free-slot-link.svg"
-    alt="Free slot link" />
+<Image src="/images/posts/2024/12/std-hive/free-slot-link.svg" alt="Free slot link" />
 
 通过跳跃域即可得知连续“空泡”的长度，因此空闲链表并没有将所有的“空泡”全部链接起来，而只需要链接每一段连续“空泡”的第一个“空泡”即可。通过这样的两级空闲链表，插入操作可以在 $O\left(1\right)$ 的时间内找到下一个可用的“空泡”，并在 $O\left(1\right)$ 的时间内将“空泡”分配出去。
 

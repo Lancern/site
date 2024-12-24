@@ -1,5 +1,5 @@
 ---
-import GithubIcon from '@components/icon/GithubIcon.astro';
+import GithubIcon from "@components/icon/GithubIcon.astro";
 
 interface Props {
   user: string;
@@ -7,7 +7,7 @@ interface Props {
   url?: string;
 }
 
-let {user, repo, url} = Astro.props;
+let { user, repo, url } = Astro.props;
 if (url === undefined) {
   url = `https://github.com/${user}/${repo}/`;
 }
