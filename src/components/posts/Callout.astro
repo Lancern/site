@@ -1,0 +1,33 @@
+---
+import LightbulbIcon from "@components/icon/LightbulbIcon.astro";
+---
+
+<div class="callout">
+  <div class="callout-icon">
+    <LightbulbIcon size="2em" />
+  </div>
+  <div class="callout-content">
+    <slot />
+  </div>
+</div>
+
+<style>
+  .callout {
+    margin-top: 2em;
+    background-color: var(--callout-bg-color);
+    padding: 1em 1em;
+    border-radius: 4px;
+    display: flex;
+    gap: 1em;
+  }
+
+  .callout-icon {
+    stroke: var(--callout-icon-stroke);
+  }
+</style>
+
+<style is:global>
+  .callout-content p:first-child {
+    margin-top: 0;
+  }
+</style>
