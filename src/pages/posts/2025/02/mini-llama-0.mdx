@@ -1,0 +1,118 @@
+---
+layout: "@layouts/PostLayout.astro"
+title: 从零开始实现本地大模型推理：系列介绍与模型文件的加载
+date: 2025-02-17
+category: MLsys
+tags: [mlsys, llm, mini-llama]
+---
+
+import Callout from "@components/posts/Callout.astro";
+import Image from "@components/posts/Image.astro";
+
+最近随着 DeepSeek 等生成式对话模型的火热，我对承载此类大语言模型推理任务的基础软件的实现原理产生了浓厚的兴趣。本文作者并没有任何 AI 相关的背景和工作经验，在撰写此文时对大模型的理解仅仅停留在一名普通大模型用户的水平。本着“重复造轮子就是最好的学习方式”的原则，我决定以著名的本地大模型推理框架 [llama.cpp](https://github.com/ggml-org/llama.cpp) 为参考，自己从零开始实现一个类似的本地大模型推理框架，我将它称为 mini-llama 。
+
+在这一系列的文章中，我将以一个 MLsys 领域零基础的学习者的视角，尝试对 llama.cpp 进行功能性拆解，依次剖析其中各个组成部分的核心工作原理，并最终在 mini-llama 内予以重新实现。本系列的最终目标是让 mini-llama 能够在本地运行 DeepSeek-R1-7b 这一模型。我的实现代码会同步发布到 [Lancern/mini-llama](https://github.com/Lancern/mini-llama) 这一 GitHub 仓库，以供读者参考。本文作者在相关领域的经验和能力均有所不足，读者若发现存在错误或能够进一步改进的地方，随时欢迎指出。
+
+## 大模型推理流程极速介绍
+
+在开始之前，我认为我们有必要浅尝一下 llama.cpp 的工作流程，来让我们对一个本地大模型推理框架需要完成的具体任务拥有一个最基本的认识。llama.cpp 项目仓库中包含了一些使用示例，其中一个示例 [simple](https://github.com/ggml-org/llama.cpp/blob/master/examples/simple/simple.cpp) 向我们展示了如何通过调用 llama.cpp 提供的一些 C/C++ API 来使用特定的大模型从提示词生成文本。从这个示例我们可以窥见 llama.cpp 的一个最简工作流程。
+
+首先，用户需要预先准备好希望使用的大模型。模型需要以一种称为 GGUF 的格式保存在一个本地文件中，llama.cpp 会从这一本地文件中加载模型。模型文件给出了一些描述模型的元数据以及训练好的模型权重。
+
+<Callout>
+    GGUF 并不是保存大模型的唯一一种文件格式。其他流行的大模型文件格式包括 HuggingFace 力推的 safetensor 格式，各个 AI 编程框架提供的本地模型格式（例如 PyTorch 的 pt 格式等），ONNX 格式等等。在 mini-llama 中，我们只考虑 GGUF 格式。
+</Callout>
+
+在模型加载完毕后，我们需要对提示词进行 tokenization 。Tokenization 与分词非常类似，大模型一次性无法处理一个整句，我们需要将提示词按某种规则打散成为若干 token 然后才能交给大模型处理。一种最简单的 tokenization 规则就是使用分词，然后将分词得到的每个单词分别映射为一个 token 。但目前已有的大模型大多使用更加复杂的 tokenization 规则，这些规则会使用比传统分词更加细致的粒度对提示词进行划分。
+
+Tokenization 完毕后，提示词便被转换为了一系列 token ，接下来终于轮到大模型出场了。生成式语言模型最基本的工作原理就是从给出的一系列 token 预测下一个 token，这一过程写作伪代码就是：
+
+```python
+def generate(llm, tokens, n):
+    while not generate_completed:
+        next_token = sample(llm(tokens[-n:]))
+        tokens.append(next_token)
+    return tokens
+```
+
+其中 `tokens[-n:]` 称为模型的上下文，参数 `n` 即为所谓的上下文长度。我们可以认为大模型每一轮生成的输入是一个最多包含 `n` 个 token 的上下文，每一轮的输出是下一个 token 的一个概率分布。我们根据某种预定义的策略，从大模型输出的概率分布中随机采样一个 token，便得到了下一个 token 。我们把新的 token 加入到上下文中，将更新的上下文重新输入到模型中，便可得到下下个 token 。不断重复这一过程，模型便可从提示词的 token 序列开始，生成出来一系列后续 token 。最后，我们执行 tokenization 的逆操作，将模型生成出来的 token 恢复为人类能够理解的文本，文本生成的任务便完成了。
+
+在上面的伪代码中，`llm` 这一个伪代码函数事实上是一个巨大的黑箱，内部还包含巨量细节。限于篇幅和文章结构，我们无法在这里就将这个黑箱打开，我们将在后续章节中一步步探索这个黑箱中的各部分内容。
+
+## 模型文件的加载
+
+### GGUF 文件格式
+
+前面提到，llama.cpp 使用一种称为 GGUF 的文件格式来保存模型。这种文件格式的规格定义可以在 GitHub 仓库 [ggml-org/ggml](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md) 中找到。借用规格定义中的图例，一个 GGUF 文件的结构如下图所示：
+
+<Image src="/images/posts/2025/02/mini-llama-0/gguf-format.png" alt="One Block Hive" />
+
+如你所见，GGUF 文件的结构非常简单，主要由三部分构成：
+
+- 一个固定 24 字节大小的文件头；
+- 一个键值对集合，其中键值对的数量在文件头中给出。这些键值对提供了模型的一些元数据，因此也称为元数据键值对；
+- 模型中包含的张量信息和数据，张量的数量在文件头中给出。所有张量的元数据和权重数据都是分开存放的，每个张量的元数据会包含张量的名字、形状、类型等信息，并提供一个偏移量用于在 GGUF 文件中定位张量的权重数据的起点。
+
+我们可以使用 llama.cpp 仓库中一个名为 `gguf_dump.py` 的脚本来查看一个 GGUF 文件中的信息。在将 llama.cpp 克隆到本地后，在 llama.cpp 目录下运行：
+
+```bash
+python3 gguf-py/gguf/scripts/gguf_dump.py file.gguf
+```
+
+<Callout>
+    一些老版本的 llama.cpp 将 `gguf_dump.py` 这个脚本放置在 `gguf-py/scripts` 这一目录下。
+</Callout>
+
+便可以查看 `file.gguf` 这个 GGUF 文件中的信息。例如，以下是使用上面的脚本查看 DeepSeek-R1-7b 模型文件的部分输出：
+
+```
+INFO:gguf-dump:* Loading: /mnt/d/LLM/DeepSeek-R1-Distill-Qwen-7B-Q6_K.gguf
+* File is LITTLE endian, script is running on a LITTLE endian host.
+* Dumping 33 key/value pair(s)
+      1: UINT32     |        1 | GGUF.version = 3
+      2: UINT64     |        1 | GGUF.tensor_count = 339
+      3: UINT64     |        1 | GGUF.kv_count = 30
+      4: STRING     |        1 | general.architecture = 'qwen2'
+      5: STRING     |        1 | general.type = 'model'
+      6: STRING     |        1 | general.name = 'DeepSeek R1 Distill Qwen 7B'
+      7: STRING     |        1 | general.basename = 'DeepSeek-R1-Distill-Qwen'
+      8: STRING     |        1 | general.size_label = '7B'
+... omitted
+* Dumping 339 tensor(s)
+      1:  544997376 |  3584, 152064,     1,     1 | Q6_K    | output.weight
+      2:       3584 |  3584,     1,     1,     1 | F32     | output_norm.weight
+      3:  544997376 |  3584, 152064,     1,     1 | Q6_K    | token_embd.weight
+      4:        512 |   512,     1,     1,     1 | F32     | blk.0.attn_k.bias
+      5:    1835008 |  3584,   512,     1,     1 | Q6_K    | blk.0.attn_k.weight
+      6:       3584 |  3584,     1,     1,     1 | F32     | blk.0.attn_norm.weight
+      7:   12845056 |  3584,  3584,     1,     1 | Q6_K    | blk.0.attn_output.weight
+      8:       3584 |  3584,     1,     1,     1 | F32     | blk.0.attn_q.bias
+      9:   12845056 |  3584,  3584,     1,     1 | Q6_K    | blk.0.attn_q.weight
+     10:        512 |   512,     1,     1,     1 | F32     | blk.0.attn_v.bias
+     11:    1835008 |  3584,   512,     1,     1 | Q6_K    | blk.0.attn_v.weight
+... omitted
+```
+
+在本文和该系列的下一篇文章中，我们主要考虑元数据键值对中的内容。张量信息和张量权重在后续构建和运行模型计算图时才会用到。
+
+### 元数据键值对
+
+GGUF 文件以元数据键值对的形式对模型信息进行描述。每个键值对的 key 是一个字符串，每个键值对的 value 则可能是：
+
+- 一个 8 / 16 / 32 / 64 位有符号或无符号整数；
+- 一个单精度或双精度浮点数；
+- 一个布尔值；
+- 一个字符串；
+- 一个同质数组，数组中的所有元素具有相同的类型。
+
+所有 GGUF 文件都包含一个非常重要的元数据键值对，它的 key 为 `general.architecture` 。这个键值对指出了模型使用何种架构，这直接决定模型的内部结构。对于 DeepSeek-R1-7b 这个模型来说，它的 `general.architecture` 值为 `qwen2` ，因为 DeepSeek-R1 使用和 Qwen2 相同的模型结构。
+
+GGUF 文件的规格说明中还列举了其他可以在 GGUF 文件中提供的元数据键值对。限于篇幅，本文不再对每个键值对进行一一介绍；在后续文章中我们会在需要时依次介绍 GGUF 文件中的其他重要的元数据键值对。
+
+### 实现
+
+GGUF 文件的加载这一部分实现起来非常容易。GGUF 文件支持通过 `mmap` 进行加载；我们只需要使用 `mmap` 将 GGUF 模型文件映射到地址空间中，然后按照 GGUF 格式规格进行解析即可。
+
+## 本文小结
+
+本文简要介绍了 GGUF 文件的格式及其各个组成部分。将 GGUF 文件中的内容加载到内存后，我们便可以开始着手实现大模型推理的各个环节了。下一篇文章将会介绍大模型推理的第一个步骤，即 tokenization 。
