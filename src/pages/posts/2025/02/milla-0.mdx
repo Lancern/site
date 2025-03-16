@@ -3,15 +3,15 @@ layout: "@layouts/PostLayout.astro"
 title: 从零开始实现本地大模型推理：系列介绍与模型文件的加载
 date: 2025-02-17
 category: MLsys
-tags: [mlsys, llm, mini-llama]
+tags: [mlsys, llm, milla]
 ---
 
 import Callout from "@components/posts/Callout.astro";
 import Image from "@components/posts/Image.astro";
 
-最近随着 DeepSeek 等生成式对话模型的火热，我对承载此类大语言模型推理任务的基础软件的实现原理产生了浓厚的兴趣。本文作者并没有任何 AI 相关的背景和工作经验，在撰写此文时对大模型的理解仅仅停留在一名普通大模型用户的水平。本着“重复造轮子就是最好的学习方式”的原则，我决定以著名的本地大模型推理框架 [llama.cpp](https://github.com/ggml-org/llama.cpp) 为参考，自己从零开始实现一个类似的本地大模型推理框架，我将它称为 mini-llama 。
+最近随着 DeepSeek 等生成式对话模型的火热，我对承载此类大语言模型推理任务的基础软件的实现原理产生了浓厚的兴趣。本文作者并没有任何 AI 相关的背景和工作经验，在撰写此文时对大模型的理解仅仅停留在一名普通大模型用户的水平。本着“重复造轮子就是最好的学习方式”的原则，我决定以著名的本地大模型推理框架 [llama.cpp](https://github.com/ggml-org/llama.cpp) 为参考，自己从零开始实现一个类似的本地大模型推理框架，我将它称为 milla 。
 
-在这一系列的文章中，我将以一个 MLsys 领域零基础的学习者的视角，尝试对 llama.cpp 进行功能性拆解，依次剖析其中各个组成部分的核心工作原理，并最终在 mini-llama 内予以重新实现。本系列的最终目标是让 mini-llama 能够在本地运行 DeepSeek-R1-7b 这一模型。我的实现代码会同步发布到 [Lancern/mini-llama](https://github.com/Lancern/mini-llama) 这一 GitHub 仓库，以供读者参考。本文作者在相关领域的经验和能力均有所不足，读者若发现存在错误或能够进一步改进的地方，随时欢迎指出。
+在这一系列的文章中，我将以一个 MLsys 领域零基础的学习者的视角，尝试对 llama.cpp 进行功能性拆解，依次剖析其中各个组成部分的核心工作原理，并最终在 milla 内予以重新实现。本系列的最终目标是让 milla 能够在本地运行 DeepSeek-R1-7b 这一模型。我的实现代码会同步发布到 [Lancern/milla](https://github.com/Lancern/milla) 这一 GitHub 仓库，以供读者参考。本文作者在相关领域的经验和能力均有所不足，读者若发现存在错误或能够进一步改进的地方，随时欢迎指出。
 
 ## 大模型推理流程极速介绍
 
@@ -20,7 +20,7 @@ import Image from "@components/posts/Image.astro";
 首先，用户需要预先准备好希望使用的大模型。模型需要以一种称为 GGUF 的格式保存在一个本地文件中，llama.cpp 会从这一本地文件中加载模型。模型文件给出了一些描述模型的元数据以及训练好的模型权重。
 
 <Callout>
-    GGUF 并不是保存大模型的唯一一种文件格式。其他流行的大模型文件格式包括 HuggingFace 力推的 safetensor 格式，各个 AI 编程框架提供的本地模型格式（例如 PyTorch 的 pt 格式等），ONNX 格式等等。在 mini-llama 中，我们只考虑 GGUF 格式。
+    GGUF 并不是保存大模型的唯一一种文件格式。其他流行的大模型文件格式包括 HuggingFace 力推的 safetensor 格式，各个 AI 编程框架提供的本地模型格式（例如 PyTorch 的 pt 格式等），ONNX 格式等等。在 milla 中，我们只考虑 GGUF 格式。
 </Callout>
 
 在模型加载完毕后，我们需要对提示词进行 tokenization 。Tokenization 与分词非常类似，大模型一次性无法处理一个整句，我们需要将提示词按某种规则打散成为若干 token 然后才能交给大模型处理。一种最简单的 tokenization 规则就是使用分词，然后将分词得到的每个单词分别映射为一个 token 。但目前已有的大模型大多使用更加复杂的 tokenization 规则，这些规则会使用比传统分词更加细致的粒度对提示词进行划分。
@@ -45,7 +45,7 @@ def generate(llm, tokens, n):
 
 前面提到，llama.cpp 使用一种称为 GGUF 的文件格式来保存模型。这种文件格式的规格定义可以在 GitHub 仓库 [ggml-org/ggml](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md) 中找到。借用规格定义中的图例，一个 GGUF 文件的结构如下图所示：
 
-<Image src="/images/posts/2025/02/mini-llama-0/gguf-format.png" alt="One Block Hive" />
+<Image src="/images/posts/2025/02/milla-0/gguf-format.png" alt="One Block Hive" />
 
 如你所见，GGUF 文件的结构非常简单，主要由三部分构成：
 
