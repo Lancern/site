@@ -35,13 +35,12 @@ const { title, hideHeader } = Astro.props;
 <style>
   html {
     font-family: "Roboto", sans-serif;
-    font-size: 18px;
+    font-size: 16px;
   }
 
   body {
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
     background-color: var(--main-bg-color);
     color: var(--main-color);
   }
@@ -60,16 +59,12 @@ const { title, hideHeader } = Astro.props;
 </style>
 
 <style is:global>
+  * {
+    box-sizing: border-box;
+  }
+
   a {
     color: inherit;
-    text-decoration: underline;
-  }
-
-  a:hover {
-    color: var(--link-hover-color);
-  }
-
-  a:focus {
-    color: var(--link-focus-color);
+    text-decoration: underline dotted var(--link-underline-color);
   }
 </style>

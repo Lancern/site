@@ -51,7 +51,7 @@ const { frontmatter } = Astro.props;
 
 <style is:global>
   .mdx-body {
-    line-height: 1.6em;
+    line-height: 1.5em;
   }
 
   .mdx-body h1,
@@ -187,5 +187,9 @@ const { frontmatter } = Astro.props;
   .mdx-body blockquote p code,
   .mdx-body table code {
     background-color: var(--post-secondary-bg-color-contrast);
+  }
+
+  .mdx-body a {
+    color: var(--link-color);
   }
 </style>

@@ -3,8 +3,10 @@
   --main-bg-color: white;
   --secondary-color: #666666;
   --secondary-bg-color: #eeeeee;
-  --link-hover-color: #5f91a6;
-  --link-focus-color: #6ca5bd;
+  --button-hover-color: #eeeeee;
+  --button-focus-color: #dddddd;
+  --link-color: #cc6600;
+  --link-underline-color: #666666;
   --hr-color: #eaeaea;
   --post-secondary-color: #646464;
   --post-secondary-bg-color: #eaeaea;
@@ -23,8 +25,10 @@
     --main-bg-color: #222222;
     --secondary-color: #bbbbbb;
     --secondary-bg-color: #333333;
-    --link-hover-color: #87ceeb;
-    --link-focus-color: #75b3cc;
+    --button-hover-color: #333333;
+    --button-focus-color: #444444;
+    --link-color: #ffcc00;
+    --link-underline-color: #bbbbbb;
     --hr-color: #525252;
     --post-secondary-color: #969696;
     --post-secondary-bg-color: #303030;

@@ -34,43 +34,47 @@ const keywords = [
         developer in China
       </p>
     </div>
-    <div class="nav-line">
-      <a class="nav-link" href="/posts">
-        <TextWithIcon>
-          <ArchiveIcon size="1.2em" slot="icon" />
-          <span class="nav-link-text">Posts</span>
-        </TextWithIcon>
-      </a>
-      <a class="nav-link" href="https://chan.lancern.xyz">
-        <TextWithIcon>
-          <ChartIcon size="1.2em" slot="icon" />
-          <span class="nav-link-text">Channel</span>
-        </TextWithIcon>
-      </a>
-      <a class="nav-link" href="/activities">
-        <TextWithIcon>
-          <LightbulbIcon size="1.2em" slot="icon" />
-          <span class="nav-link-text">Activities</span>
-        </TextWithIcon>
-      </a>
-      <a class="nav-link" href="https://github.com/Lancern" target="_blank">
-        <TextWithIcon>
-          <GithubIcon size="1.2em" slot="icon" />
-          <span class="nav-link-text">GitHub</span>
-        </TextWithIcon>
-      </a>
-      <a class="nav-link" href="/about">
-        <TextWithIcon>
-          <InfoIcon size="1.2em" slot="icon" />
-          <span class="nav-link-text">About</span>
-        </TextWithIcon>
-      </a>
-      <a class="nav-link" href="/friends">
-        <TextWithIcon>
-          <PeopleIcon size="1.2em" slot="icon" />
-          <span class="nav-link-text">Friends</span>
-        </TextWithIcon>
-      </a>
+    <div class="nav-block">
+      <div class="nav-line">
+        <a class="nav-link" href="/posts">
+          <TextWithIcon>
+            <ArchiveIcon size="1.2em" slot="icon" />
+            <span class="nav-link-text">Posts</span>
+          </TextWithIcon>
+        </a>
+        <a class="nav-link" href="https://chan.lancern.xyz">
+          <TextWithIcon>
+            <ChartIcon size="1.2em" slot="icon" />
+            <span class="nav-link-text">Channel</span>
+          </TextWithIcon>
+        </a>
+        <a class="nav-link" href="/activities">
+          <TextWithIcon>
+            <LightbulbIcon size="1.2em" slot="icon" />
+            <span class="nav-link-text">Activities</span>
+          </TextWithIcon>
+        </a>
+      </div>
+      <div class="nav-line">
+        <a class="nav-link" href="https://github.com/Lancern" target="_blank">
+          <TextWithIcon>
+            <GithubIcon size="1.2em" slot="icon" />
+            <span class="nav-link-text">GitHub</span>
+          </TextWithIcon>
+        </a>
+        <a class="nav-link" href="/about">
+          <TextWithIcon>
+            <InfoIcon size="1.2em" slot="icon" />
+            <span class="nav-link-text">About</span>
+          </TextWithIcon>
+        </a>
+        <a class="nav-link" href="/friends">
+          <TextWithIcon>
+            <PeopleIcon size="1.2em" slot="icon" />
+            <span class="nav-link-text">Friends</span>
+          </TextWithIcon>
+        </a>
+      </div>
     </div>
   </div>
 </BaseLayout>
@@ -113,9 +117,12 @@ const keywords = [
     font-size: 1.6rem;
   }
 
+  .nav-block {
+    margin-top: 2rem;
+  }
+
   .nav-line {
     display: flex;
-    margin-top: 1.6rem;
   }
 
   @media only screen and (max-width: 480px) {
@@ -134,17 +141,20 @@ const keywords = [
   }
 
   .nav-link {
-    display: flex;
-    align-items: center;
     padding: 1rem 2rem;
+    width: 200px;
+    border-radius: 4px;
     text-decoration: none;
-    font-size: 1.2rem;
+    font-size: 1.4rem;
     font-weight: 500;
     color: var(--main-color);
     stroke: var(--main-color);
   }
 
-  .nav-link:hover .nav-link-text {
-    text-decoration: underline;
+  .nav-link:hover {
+    background-color: var(--button-hover-color);
+  }
+  .nav-link:focus {
+    background-color: var(--button-focus-color);
   }
 </style>
