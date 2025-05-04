@@ -1,27 +1,12 @@
 ---
 import BaseLayout from "@layouts/BaseLayout.astro";
 import PostList, { type PostInfo } from "@components/PostList.astro";
-import type { PostInstance } from "@scripts/posts";
+import { filterAndSortPosts, type PostInstance } from "@scripts/posts";
 
+// FIXME: Astro.glob is deprecated in Astro v5.0, see:
+// https://docs.astro.build/en/reference/api-reference/#astroglob
 const allPosts = await Astro.glob<PostInstance>("../pages/posts/**/*.{md,mdx}");
-
-// Filter out the most recent 10 published posts to be displayed on this page.
-const allPublishedPosts = allPosts.filter((post) => !post.frontmatter.draft);
-allPublishedPosts.sort((lhs, rhs) => {
-  let lhsDate = lhs.frontmatter.date;
-  let rhsDate = rhs.frontmatter.date;
-  if (typeof lhsDate === "string") {
-    lhsDate = new Date(lhsDate);
-  }
-  if (typeof rhsDate === "string") {
-    rhsDate = new Date(rhsDate);
-  }
-
-  // Sort in date descending order.
-  return rhsDate.valueOf() - lhsDate.valueOf();
-});
-
-const posts = allPublishedPosts.slice(0, 10) as PostInfo[];
+const posts = filterAndSortPosts(allPosts) as PostInfo[];
 ---
 
 <BaseLayout title="Posts - Lancern's Home">
