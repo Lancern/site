@@ -16,16 +16,16 @@
     "start": "astro dev"
   },
   "dependencies": {
-    "@astrojs/mdx": "^2.3.1",
-    "@astrojs/rss": "^4.0.5",
-    "@astrojs/vercel": "^7.8.2",
-    "astro": "^4.7.1",
+    "@astrojs/mdx": "^4.2.6",
+    "@astrojs/rss": "^4.0.11",
+    "@astrojs/vercel": "^8.1.4",
+    "astro": "^5.7.10",
     "octokit": "^4.0.2",
     "rehype-mathjax": "^6.0.0",
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.5.10",
+    "@astrojs/check": "^0.9.4",
     "prettier": "^3.2.5",
     "prettier-plugin-astro": "^0.13.0",
     "typescript": "^5.4.5"

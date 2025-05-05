@@ -3,9 +3,9 @@ import BaseLayout from "@layouts/BaseLayout.astro";
 import PostList, { type PostInfo } from "@components/PostList.astro";
 import { filterAndSortPosts, type PostInstance } from "@scripts/posts";
 
-// FIXME: Astro.glob is deprecated in Astro v5.0, see:
-// https://docs.astro.build/en/reference/api-reference/#astroglob
-const allPosts = await Astro.glob<PostInstance>("../pages/posts/**/*.{md,mdx}");
+const allPosts = Object.values(
+  import.meta.glob<PostInstance>("./posts/**/*.{md,mdx}", { eager: true }),
+);
 const posts = filterAndSortPosts(allPosts) as PostInfo[];
 ---
 
