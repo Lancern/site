@@ -46,5 +46,37 @@ export function filterAndSortPosts(posts: PostInstance[], filter?: PostFilter): 
   });
 
   // By default the 10 most recent posts are kept
-  return posts.slice(0, filter?.count ?? 10);
+  return posts.slice(0, filter?.count ?? 20);
+}
+
+export function getPostTags(posts: PostInstance[]): string[] {
+  return getPostProperties(posts, (post) => post.frontmatter.tags);
+}
+
+export function getPostCategories(posts: PostInstance[]): string[] {
+  return getPostProperties(posts, (post) => post.frontmatter.category);
+}
+
+function getPostProperties<T>(
+  posts: PostInstance[],
+  property: (post: PostInstance) => T | T[] | undefined,
+): T[] {
+  // Filter out draft posts first
+  posts = posts.filter((post) => !post.frontmatter.draft);
+
+  const ret = new Set<T>();
+  for (const p of posts) {
+    const props = property(p);
+    if (typeof props === "undefined") {
+      continue;
+    }
+    if (Array.isArray(props)) {
+      for (const prop of props) {
+        ret.add(prop);
+      }
+      continue;
+    }
+    ret.add(props);
+  }
+  return Array.from(ret);
 }

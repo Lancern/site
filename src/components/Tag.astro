@@ -6,8 +6,7 @@ interface Props {
 }
 
 const { name, category, button } = Astro.props;
-const escapedName = encodeURIComponent(name);
-const link = category ? `/posts/category/${escapedName}` : `/posts/tag/${escapedName}`;
+const link = category ? `/posts/category/${name}` : `/posts/tag/${name}`;
 ---
 
 {

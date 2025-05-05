@@ -1,0 +1,39 @@
+---
+import BaseLayout from "@layouts/BaseLayout.astro";
+import BookmarkIcon from "@components/icon/BookmarkIcon.astro";
+import PostList, { type PostInfo } from "@components/PostList.astro";
+import { filterAndSortPosts, getPostCategories, type PostInstance } from "@scripts/posts";
+
+export function getStaticPaths() {
+  const allPosts = Object.values(
+    import.meta.glob<PostInstance>("../**/*.{md,mdx}", { eager: true }),
+  );
+  const categories = getPostCategories(allPosts);
+  return categories.map((category) => ({
+    params: { category },
+  }));
+}
+
+const { category } = Astro.params;
+const allPosts = Object.values(
+  import.meta.glob<PostInstance>("../**/*.{md,mdx}", { eager: true }),
+);
+const posts = filterAndSortPosts(allPosts, { category }) as PostInfo[];
+---
+
+<BaseLayout title={`Category: ${category} - Lancern's Home`}>
+  <h1 class="title">
+    <BookmarkIcon size="1.2em" />
+    {category}
+  </h1>
+  <PostList posts={posts} />
+</BaseLayout>
+
+<style>
+  .title {
+    stroke: var(--main-color);
+    font-size: 1.8rem;
+    margin-top: 0;
+    margin-bottom: 2rem;
+  }
+</style>
