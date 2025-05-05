@@ -1,0 +1,34 @@
+---
+interface Props {
+  user: string;
+  repo: string;
+  url?: string;
+}
+
+let { user, repo, url } = Astro.props;
+if (url === undefined) {
+  url = `https://huggingface.co/${user}/${repo}/`;
+}
+---
+
+<span class="huggingface-repo-link">
+  <img
+    class="huggingface-icon"
+    src="https://huggingface.co/front/assets/huggingface_logo-noborder.svg"
+  />
+  <a href={url} target="_blank">
+    {user}/{repo}
+  </a>
+</span>
+
+<style>
+  .huggingface-icon {
+    width: 1.2em;
+    height: 1.2em;
+    vertical-align: sub;
+  }
+
+  .huggingface-repo-link {
+    stroke: var(--main-color);
+  }
+</style>

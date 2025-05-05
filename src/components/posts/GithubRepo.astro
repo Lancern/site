@@ -14,13 +14,21 @@ if (url === undefined) {
 ---
 
 <span class="github-repo-link">
-  <GithubIcon size="1em" />
+  <GithubIcon size="1.2em" />
   <a href={url} target="_blank">
     {user}/{repo}
   </a>
 </span>
 
 <style>
+  .github-icon {
+    display: inline-block;
+    color: var(--main-color);
+    fill: currentColor;
+    width: 1.2em;
+    height: 1.2em;
+  }
+
   .github-repo-link {
     stroke: var(--main-color);
   }
