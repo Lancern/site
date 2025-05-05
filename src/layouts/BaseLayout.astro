@@ -18,7 +18,15 @@ const { title, hideHeader } = Astro.props;
     <meta charset="utf-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width" />
-    <meta name="generator" content={Astro.generator} />
+    <meta name="generator" content={Astro.generator} /><link
+      rel="preconnect"
+      href="https://fonts.googleapis.com"
+    />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@100..900&family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap"
+      rel="stylesheet"
+    />
     <title>{title}</title>
   </head>
   <body>
@@ -34,7 +42,7 @@ const { title, hideHeader } = Astro.props;
 
 <style>
   html {
-    font-family: "Roboto", sans-serif;
+    font-family: "Noto Sans SC", "Noto Sans", sans-serif;
     font-size: 16px;
   }
 
