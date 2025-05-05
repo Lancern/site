@@ -3,8 +3,9 @@
   --main-bg-color: white;
   --secondary-color: #666666;
   --secondary-bg-color: #eeeeee;
-  --button-hover-color: #eeeeee;
-  --button-focus-color: #dddddd;
+  --button-bg-color: #f0f0f0;
+  --button-hover-color: #e2e2e2;
+  --button-focus-color: #d2d2d2;
   --hr-color: #eaeaea;
   --post-secondary-color: #646464;
   --post-secondary-bg-color: #eaeaea;
@@ -23,8 +24,9 @@
     --main-bg-color: #222222;
     --secondary-color: #bbbbbb;
     --secondary-bg-color: #333333;
-    --button-hover-color: #333333;
-    --button-focus-color: #444444;
+    --button-bg-color: #2f2f2f;
+    --button-hover-color: #3f3f3f;
+    --button-focus-color: #4f4f4f;
     --hr-color: #525252;
     --post-secondary-color: #969696;
     --post-secondary-bg-color: #303030;

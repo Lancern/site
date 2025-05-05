@@ -1,6 +1,8 @@
 ---
 import BookmarkIcon from "@components/icon/BookmarkIcon.astro";
 import CalendarIcon from "@components/icon/CalendarIcon.astro";
+import TagIcon from "@components/icon/TagIcon.astro";
+import Tag from "@components/Tag.astro";
 import TextWithIcon from "@components/TextWithIcon.astro";
 import type { PostFrontmatter } from "@scripts/posts";
 
@@ -21,12 +23,32 @@ const { frontmatter, url } = Astro.props;
         {new Date(frontmatter.date).toLocaleDateString()}
       </TextWithIcon>
     </div>
-    <div class="post-meta-item post-meta-category">
-      <TextWithIcon>
-        <BookmarkIcon size="1.2em" slot="icon" />
-        {frontmatter.category}
-      </TextWithIcon>
-    </div>
+    {
+      frontmatter.category && (
+        <div class="post-meta-item post-meta-category">
+          <TextWithIcon>
+            <BookmarkIcon size="1.2em" slot="icon" />
+            <Tag name={frontmatter.category} category />
+          </TextWithIcon>
+        </div>
+      )
+    }
+    {
+      frontmatter.tags && (
+        <div class="post-meta-item post-meta-tags">
+          <TextWithIcon>
+            <TagIcon size="1.2em" slot="icon" />
+            <div class="tags-row">
+              {frontmatter.tags.map((tag) => (
+                <span class="tag-container">
+                  <Tag name={tag} />
+                </span>
+              ))}
+            </div>
+          </TextWithIcon>
+        </div>
+      )
+    }
   </div>
 </div>
 
@@ -47,8 +69,22 @@ const { frontmatter, url } = Astro.props;
   .meta-line {
     display: flex;
     column-gap: 2em;
+    row-gap: 0.5em;
+    flex-wrap: wrap;
     color: var(--secondary-color);
     stroke: var(--secondary-color);
     font-size: 0.9em;
+  }
+
+  .tags-row {
+    display: inline;
+  }
+
+  .tag-container::before {
+    content: ",";
+  }
+
+  .tag-container:first-child::before {
+    content: none;
   }
 </style>

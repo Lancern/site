@@ -25,12 +25,16 @@ const tags = frontmatter.tags ?? [];
         {new Date(frontmatter.date).toLocaleDateString()}
       </TextWithIcon>
     </div>
-    <div class="post-meta-item">
-      <TextWithIcon>
-        <BookmarkIcon size="1.2em" slot="icon" />
-        {frontmatter.category}
-      </TextWithIcon>
-    </div>
+    {
+      frontmatter.category && (
+        <div class="post-meta-item">
+          <TextWithIcon>
+            <BookmarkIcon size="1.2em" slot="icon" />
+            <Tag name={frontmatter.category} category />
+          </TextWithIcon>
+        </div>
+      )
+    }
     <a
       class="post-meta-item"
       href="https://creativecommons.org/licenses/by-sa/4.0/"
@@ -44,7 +48,7 @@ const tags = frontmatter.tags ?? [];
   </div>
   <slot />
   <div class="tags-line" slot="footer">
-    {tags.map((t) => <Tag name={t} />)}
+    {tags.map((t) => <Tag name={t} button />)}
   </div>
 </MDXLayout>
 

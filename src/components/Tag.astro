@@ -1,19 +1,47 @@
 ---
 interface Props {
   name: string;
+  category?: boolean;
+  button?: boolean;
 }
 
-const { name } = Astro.props;
+const { name, category, button } = Astro.props;
+const escapedName = encodeURIComponent(name);
+const link = category ? `/posts/category/${escapedName}` : `/posts/tag/${escapedName}`;
 ---
 
-<div class="tag">
-  {name}
-</div>
+{
+  button ? (
+    <a class="tag-link tag-button" href={link}>
+      {name}
+    </a>
+  ) : (
+    <a class="tag-link inline-tag-link" href={link}>
+      {name}
+    </a>
+  )
+}
 
 <style>
-  .tag {
+  .tag-button {
     border-radius: 4px;
     padding: 0.4em 0.6em;
-    background-color: var(--secondary-bg-color);
+    background-color: var(--button-bg-color);
+  }
+
+  .tag-button:hover {
+    background-color: var(--button-hover-color);
+  }
+
+  .tag-button:focus {
+    background-color: var(--button-focus-color);
+  }
+
+  .tag-link {
+    text-decoration: none;
+  }
+
+  .inline-tag-link:hover {
+    text-decoration: underline;
   }
 </style>
