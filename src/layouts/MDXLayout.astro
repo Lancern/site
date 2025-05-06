@@ -68,8 +68,13 @@ const { frontmatter } = Astro.props;
   .mdx-body pre,
   .mdx-body .callout,
   .mdx-body .image-container {
-    margin-top: 2em;
-    margin-bottom: 0;
+    margin: 2em 0;
+  }
+
+  /* MathJax renders equations inside mjx-container elements */
+  .mdx-body mjx-container {
+    /* MathJax ships with a default margin for mjx-container elements. Override it. */
+    margin: 2em 0 !important;
   }
 
   .mdx-body li {
