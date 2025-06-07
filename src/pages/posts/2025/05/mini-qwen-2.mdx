@@ -1,0 +1,68 @@
+---
+layout: "@layouts/PostLayout.astro"
+title: 从零开始实现本地大模型推理 2：Tokenizer
+date: 2025-05-12
+category: MLsys
+tags: [mlsys, llm, mini-qwen]
+---
+
+import Callout from "@components/posts/Callout.astro";
+
+语言模型推理的第一步是将提示词拆分为一系列 token ，并将每个 token 编码为一个整数。例如，对于下面这一个提示词：
+
+```
+How does a large language model work?
+```
+
+Qwen3 的 tokenizer 会将其拆分为以下 8 个 token（ `˽` 字符表示空格）：
+
+```
+How
+˽does
+˽a
+˽large
+˽language
+˽model
+˽work
+?
+```
+
+随后，tokenizer 会查找一张由模型的配置文件提供的映射表，分别将这 8 个 token 映射为一个整数，称为 token 的 token ID ：
+
+```
+How        => 4340
+˽does      => 1558
+˽a         => 264
+˽large     => 3460
+˽language  => 4128
+˽model     => 1614
+˽work      => 975
+?          => 30
+```
+
+这个由模型文件提供的映射表称为词表（vocabulary）。经过上面这样的处理后，tokenizer 便将提示词转换为了一个包含 8 个整数值的张量，这个张量就是模型的输入张量。
+
+<Callout>
+上面我们声称这个包含 8 个整数的一维张量就是大模型的输入，这个说法不完全准确。在真实的 tokenizer 实现中，tokenizer 在执行 tokenize 操作前还会使用一些预定义的上下文对用户的提示词进行包裹来辅助模型产生更好的回答。这些上下文内容在经过 tokenize 后也会成为模型的输入。
+</Callout>
+
+我们再来看一个中文例子。对于这一个提示词：”大语言模型是如何工作的？“，Qwen3 的 tokenizer 会这样对其进行 tokenize ：
+
+```
+大     => 26288
+语言   => 102064
+模型   => 104949
+是如何 => 107853
+工作的 => 104360
+？     => 11319
+```
+
+看到这里，或许你会认为 tokenize 只需要对输入的提示词进行传统的分词处理就可以了。但事实上，所有最新的语言模型都使用比传统分词更加复杂的算法来对输入提示词进行 tokenize 。这是因为传统分词具有一个缺陷，即无法很好地处理模型不认识的单词。例如，用户输入了这样的一个包含稀有词汇的句子：
+
+```
+What is monochromatic light?
+```
+
+虽然 monochromatic 这个生僻词模型并不认识，但单词的各个组成构件，例如词前缀和后缀等，在一定程度上是可以反映单词的含义的。使用传统分词算法来对这个提示词进行处理，如果模型的词表中没有 monochromatic 这个生僻词汇，tokenizer 将只能把它映射为一个表示未知 token 的 token ID，在 tokenize 后这个单词包含的所有信息对于模型来说便丢失了。因此，包括 Qwen3 在内，所有最新的语言模型都不会使用传统分词来对提示词进行 tokenize 处理，它们使用的分词算法都能够做到对不认识的单词做进一步拆分。对于 Qwen3 来说，它使用的“分词”算法称为 Byte Pair Encoding ，简称 BPE 。
+
+## Byte Pair Encoding
