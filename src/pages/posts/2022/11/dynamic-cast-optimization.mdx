@@ -6,6 +6,8 @@ category: C++
 tags: [benchmark, c++, libcxxabi]
 ---
 
+import Image from "@components/posts/Image.astro";
+
 `dynamic_cast` 是 C++ 中包含的四种类型转换操作符之一，它利用运行时类型识别（RTTI）特性在运行时检查并转换多态对象的类型。它的主要功能包括：
 
 - 从基类子对象指针得到最派生对象指针：`dynamic_cast<void*>(expr)` 。`expr` 是一个指向某个最派生对象中的某个基类子对象的指针，`dynamic_cast` 可用于从 `expr` 得到其所属的最派生对象的指针。由于并不清楚最派生对象的具体类型，因此这种情况下只能返回一个 `void*` 类型的指针指向最派生对象。
@@ -184,7 +186,7 @@ To* to = dynamic_cast<To*>(from);  // Ambiguous
 
 上面的例子中，`dynamic_cast` 将不知晓应该是将 `From` 指针转换为指向 `Derived::Left::To` 子对象的指针还是转换为 `Derived::Right::To` 子对象的指针，因此上述转换会失败。我们如果将继承关系可视化为一张 DAG：
 
-TODO
+<Image src="/images/posts/2022/11/dynamic-cast-optimization/inheritance-1.drawio.svg" alt="Inheritance Diagram" />
 
 其中实线表示非虚继承关系、虚线表示虚继承关系。那么可以看到，在向下转换时，必须满足从最派生对象（即 `Derived` 对象）到 `from` 基类子对象（即 `Base` 基类子对象）的路径上有且仅有一个 `To` 类型的基类子对象，否则就会产生二义性错误。
 
@@ -200,7 +202,7 @@ TODO
 
 `dynamic_cast<To*>((From*)from)` 是一个侧向转换，当且仅当 `From` 不是 `To` 的直接或间接基类。与向下转换时类似，此时也可能出现两种转换失败原因：即对象的动态类型并不是 `To` 或 `To` 的子类、或者转换存在二义性。不难想到，此时的二义性问题主要是最派生对象存在多个 `To` `基类子对象，dynamic_cast` 无法决定需要转换为哪一个基类子对象。例如：
 
-TODO
+<Image src="/images/posts/2022/11/dynamic-cast-optimization/inheritance-2.drawio.svg" alt="Inheritance Diagram" />
 
 此时如果将 `From*` 转换为 `To*`，`dynamic_cast` 将无法知晓应该转换为指向 `Derived::Left::To` 子对象还是转换为 `Derived::Right::To` 子对象，因此转换失败。
 
