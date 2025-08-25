@@ -7,6 +7,7 @@ tags: [mlsys, llm, mini-qwen]
 ---
 
 import Callout from "@components/posts/Callout.astro";
+import GithubRepo from "@components/posts/GithubRepo.astro";
 
 语言模型推理的第一步是将提示词拆分为一系列 token ，并将每个 token 编码为一个整数。例如，对于下面这一个提示词：
 
@@ -46,7 +47,7 @@ How        => 4340
 上面我们声称这个包含 8 个整数的一维张量就是大模型的输入，这个说法不完全准确。在真实的 tokenizer 实现中，tokenizer 在执行 tokenize 操作前还会使用一些预定义的上下文对用户的提示词进行包裹来辅助模型产生更好的回答。这些上下文内容在经过 tokenize 后也会成为模型的输入。
 </Callout>
 
-我们再来看一个中文例子。对于这一个提示词：”大语言模型是如何工作的？“，Qwen3 的 tokenizer 会这样对其进行 tokenize ：
+我们再来看一个中文例子。对于这一个提示词“大语言模型是如何工作的？”，Qwen3 的 tokenizer 会这样对其进行 tokenize ：
 
 ```
 大     => 26288
@@ -63,6 +64,104 @@ How        => 4340
 What is monochromatic light?
 ```
 
-虽然 monochromatic 这个生僻词模型并不认识，但单词的各个组成构件，例如词前缀和后缀等，在一定程度上是可以反映单词的含义的。使用传统分词算法来对这个提示词进行处理，如果模型的词表中没有 monochromatic 这个生僻词汇，tokenizer 将只能把它映射为一个表示未知 token 的 token ID，在 tokenize 后这个单词包含的所有信息对于模型来说便丢失了。因此，包括 Qwen3 在内，所有最新的语言模型都不会使用传统分词来对提示词进行 tokenize 处理，它们使用的分词算法都能够做到对不认识的单词做进一步拆分。对于 Qwen3 来说，它使用的“分词”算法称为 Byte Pair Encoding ，简称 BPE 。
+虽然 monochromatic 这个生僻词模型并不认识，但单词的各个组成构件，例如词前缀和后缀等，在一定程度上是可以反映单词的含义的。使用传统分词算法来对这个提示词进行处理，如果模型的词表中没有 monochromatic 这个生僻词汇，tokenizer 将只能把它映射为一个表示未知 token 的 token ID，在 tokenize 后这个单词包含的所有信息对于模型来说便丢失了。因此，包括 Qwen3 在内，所有最新的语言模型都不会只使用传统分词来对提示词进行 tokenize 处理，它们使用的分词算法都能够做到对不认识的单词做进一步拆分。
+
+对于 Qwen3 来说，它使用的“分词”算法包含两个步骤：
+
+1. 对用户输入的提示词进行 pretokenization ；
+2. 对预拆分得到的每个单词进行 byte pair encoding 。
+
+## Pretokenization
+
+Pretokenization 可以理解为一种非常粗糙的分词，它负责将用户输入的一整句提示词拆分为更短的“单词”。对于 Qwen3 来说，这一步仅需要使用正则表达式就可以完成。Qwen3 使用下面这个看起来非常复杂的正则表达式作为 pretokenization 的正则表达式：
+
+```
+(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+
+```
+
+在执行 pretokenization 时，tokenizer 会使用上面的正则表达式在用户输入的完整提示词中查找所有完全匹配正则表达式的子句，并将这些子句提取出来作为 pretokenization 得到的“单词”。例如，当用户输入的提示词是：
+
+```
+How does a large language model work?
+```
+
+使用上面这个正则表达式进行匹配，可以得到以下 8 个完整匹配：
+
+```
+How
+˽does
+˽a
+˽large
+˽language
+˽model
+˽work
+?
+```
+
+这些完整匹配就是 pretokenization 得到的“单词”。如果用户输入一个中文提示词：
+
+```
+大语言模型是如何工作的？
+```
+
+Pretokenization 可以得到以下 2 个完整匹配：
+
+```
+大语言模型是如何工作的
+？
+```
+
+同样，这两个完整匹配就是 pretokenization 对于上面这一个中文提示词得到的“单词”。
 
 ## Byte Pair Encoding
+
+可以看到，对于英文的输入提示词，经过 pretokenization 得到的单词基本上已经和最终的 token 非常接近了。但是对于中文输入提示词，显然我们还需要进一步将 pretokenization 得到的“单词”进行拆分。一种拆分方法是将 pretokenization 得到的“单词”进一步拆分为单个字符，然后再尝试不断将相邻的“高频”字符对组合到一起。例如，对于“大语言模型是如何工作的”这个“单词”，我们可以首先把它拆分到单个字符：
+
+```python
+['大', '语', '言', '模', '型', '是', '如', '何', '工', '作', '的']
+```
+
+然后我们需要一张“高频字符对表”，这张表列出了在训练集（没错 tokenizer 也是需要通过训练得到的）中高频出现的所有字符对。例如，如果这张表包含这些高频字符对：
+
+```python
+[
+    ['语', '言'],
+    ['模', '型'],
+    ['如', '何'],
+    ['工', '作'],
+]
+```
+
+那么在第一轮合并后，组成原始的单词的所有单个字符便会被合并为：
+
+```python
+['大', '语言', '模型', '是', '如何', '工作', '的']
+```
+
+随后，这些合并后的“字符”（我们姑且仍旧称呼他们为字符）会进一步进行第二轮合并，合并规则与第一轮相同。这个过程会不断重复进行，直到没有相邻的字符对可以再被合并为止。例如，如果高频字符对表中还包含这些高频字符对：
+
+```python
+[
+    ['语言', '模型'],
+    ['大', '语言模型'],
+    ['是', '如何'],
+]
+```
+
+那么最终经过若干轮反复合并后，组成原始的单词的所有单个字符便会被合并为：
+
+```python
+['大语言模型', '是如何', '工作', '的']
+```
+
+上面的这一个先拆分到单个字符、再不断合并相邻字符对的方法叫做 char pair encoding 。在真实环境下，Qwen3 以及其他许多大模型实际采用的方法是这种方法的一个变种，即 byte pair encoding ，简称 BPE 。BPE 与 CPE 的唯一区别在于对“字符”的定义不同，对于 CPE 来说，一个“字符”就是一个英文字母、一个标点符号、一个汉字等等。BPE 则需要首先将输入的“单词”编码为二进制字节串（通常使用 UTF-8 编码），然后将编码后的每个字节视为一个“字符”。
+
+无论采用的是 CPE 还是 BPE，最终，tokenizer 都会通过查表将合并完成后得到的每一个“字符”映射为一个整数 ID 作为即将输入到语言模型中的一个 token 。
+
+## 实现
+
+> <GithubRepo user="Lancern" repo="mini-qwen-py" /> 仓库中的参考实现位于 [`src/miniqwen/tokenizer.py`](https://github.com/Lancern/mini-qwen-py/blob/main/src/miniqwen/tokenizer.py) 源文件中。
+
+<Callout>
+正在施工，稍后回来看看吧～
+</Callout>

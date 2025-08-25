@@ -13,28 +13,25 @@ import HuggingfaceRepo from "@components/posts/HuggingfaceRepo.astro";
 
 为了解决这个问题，我尝试了一个地狱难度的方法，即通过阅读 `llama.cpp` 的源代码来学习大模型推理的原理，然后照猫画虎地复现一个自己的版本。然而不久之后我就发现自己充分地低估了这件事的困难程度。<s>`llama.cpp` 的代码不能说是十分优雅吧，至少也可以说是依托屎山。</s>它支持市面上几乎所有的模型结构，这些不同的模型的实现全部混杂在一起，代码中包含了大量的条件判断，对于一个初学者来说阅读 `llama.cpp` 代码的体验着实不佳。另外，`llama.cpp` 采用 C++ 实现，需要处理大量的实现细节，而主干脉络则被被淹没在海量的细节中难以分辨。因此在尝试了大约一周后，我放弃了这个计划。
 
-当然，这几周的失败经历也不是没有收获。我充分意识到了自己在 AI 领域的知识储备不足，尤其是对大模型的理解几乎为零。我决定先从最基础的深度学习知识开始学习，目标是能够理解目前最流行的基于 transformer 架构的生成式大模型的模型结构和工作原理，然后再开始着手实现一个自己的本地大模型推理工具。在过去的两个多月中，我通过 [Dive into Deep Learning](https://d2l.ai/) 这本在线书对深度学习，尤其是和大模型相关的深度学习方法和相关模型进行了一波速成。然后，我参照 Huggingface 推出的 <GithubRepo user="huggingface" repo="transformers" /> 库，花费大约两周时间从零实现了一个能够运行 <HuggingfaceRepo user="Qwen" repo="Qwen3-0.6B" /> 模型的本地推理工具。整个实现的代码量大约在 850 行 Python 代码左右。
+当然，这几周的失败经历也不是没有收获。我充分意识到了自己在 AI 领域的知识储备不足，尤其是对大模型的理解几乎为零。我决定先从最基础的深度学习知识开始学习，目标是能够理解目前最流行的基于 transformer 架构的生成式大模型的模型结构和工作原理，然后再开始着手实现一个自己的本地大模型推理工具。在过去的两个多月中，我通过 [Dive into Deep Learning](https://d2l.ai/) 这本在线书对深度学习，尤其是和大模型相关的深度学习方法和相关模型进行了一波速成。然后，我参照 Huggingface 推出的 <GithubRepo user="huggingface" repo="transformers" /> 库，花费大约两周时间从零实现了一个能够运行 <HuggingfaceRepo user="Qwen" repo="Qwen3-0.6B" /> 模型的本地推理工具。整个实现的代码量大约在 850 行 Python 代码左右，代码仓库托管在 <GithubRepo user="Lancern" repo="mini-qwen-py" /> ，可供读者参考。
 
-至此，我终于可以开始填坑了。在这一系列文章中，我将尝试手把手向你介绍如何从零开始实现一个自己的本地大模型推理工具，可以在 CPU 上运行 Qwen3-0.6B 这种小模型的语言生成推理任务。本系列文章所介绍的实现方法基于 Python 以及 PyTorch 而不是基于 C++，因为对于初学者来说使用 Python + PyTorch 更能专注于模型的核心实现，不用花费过多精力在系统层面。一旦你理解了大模型推理的核心原理，将推理工具移植到 C++ 实现会更加容易，届时再来考虑系统层面的各种优化和细节也不迟。
+至此，我终于可以开始填坑了。在这一系列文章中，我将尝试向你介绍如何从零开始实现一个自己的本地大模型推理工具，可以在 CPU 上运行 Qwen3-0.6B 这种小模型的语言生成推理任务。本系列文章所介绍的实现方法基于 Python 以及 PyTorch 而不是基于 C++，因为对于初学者来说使用 Python + PyTorch 更能专注于模型的核心实现，不用花费过多精力在系统层面。一旦你理解了大模型推理的核心原理，将推理工具移植到 C++ 实现会更加容易，届时再来考虑系统层面的各种优化和细节也不迟。
 
 ## 环境准备
 
 首先需要确保你的环境中安装了 Python 环境。在撰写本文时，我使用的 Python 版本为 3.13.3，但任何不低于 3.10 的 Python 版本应该都可以正常工作。
 
-接下来，为你的大模型本地推理工具创建一个目录，并在其中准备一个 Python 虚拟环境。这个本地推理工具最终将会运行 Qwen3-0.6B 模型，因此我们不妨将它命名为 `mini-qwen`：
+接下来，为你的大模型本地推理工具创建一个目录，并在其中准备一个 Python 项目。这个本地推理工具最终将会运行 Qwen3-0.6B 模型，因此我们不妨将它命名为 `mini-qwen`。在 2025 年的当下，我们当然推荐使用最新最热的 `uv` 来管理 Python 项目：
 
 ```bash
-mkdir mini-qwen
+uv init mini-qwen
 cd mini-qwen
-python3 -m venv venv
 ```
 
-在虚拟环境中安装一些我们会用到的 PyPI 包：
+在项目环境中安装一些我们会用到的 PyPI 包：
 
 ```bash
-source venv/bin/activate
-pip install numpy regex safetensors torch
-deactivate
+uv add numpy regex safetensors torch
 ```
 
 接下来我们把 Qwen3-0.6B 模型从 Huggingface 仓库下载到本地。Huggingface 使用 git 来管理模型仓库，其中也包含模型的权重文件。权重文件中保存了模型的所有参数的值，对于大模型来说，模型的参数极多，权重文件极大，即使是大模型中的微型模型的权重文件也有 1GB 左右大小，“满血”模型的权重文件则有可能达到数百个 GB 大小，显然超出了 git 的管理能力。为此，Huggingface 使用 [git LFS](https://git-lfs.com/) 来管理模型权重文件。在安装并配置好 git LFS 后，执行下列命令将 Qwen3-0.6B 模型下载到本地：
