@@ -197,4 +197,11 @@ const { frontmatter } = Astro.props;
   .mdx-body s {
     text-decoration-thickness: 1.5px;
   }
+
+  @media (prefers-color-scheme: dark) {
+    /* Mermaid graphs render poorly in Dark mode. Use light background instead. */
+    .mdx-body pre.mermaid[data-processed] {
+      background-color: #f4f4f4;
+    }
+  }
 </style>
