@@ -1,22 +1,29 @@
 import { Octokit } from "octokit";
+import type { ActivityArray } from "@scripts/github-types";
 
-export type ActivityArray = Awaited<ReturnType<typeof listActivities>>;
-export type Activity = ActivityArray[number];
+export const GITHUB_API_VERSION = "2026-03-10";
 
 export async function listActivities() {
+  const auth = import.meta.env.GITHUB_TOKEN;
   const octokit = new Octokit({
-    auth: import.meta.env.GITHUB_TOKEN,
+    ...(auth ? { auth } : {}),
+    request: {
+      headers: {
+        accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": GITHUB_API_VERSION,
+      },
+    },
   });
-  const octokitResponse = await octokit.rest.activity.listEventsForAuthenticatedUser({
+  const octokitResponse = await octokit.request("GET /users/{username}/events", {
     username: "Lancern",
     page: 1,
     per_page: 20,
   });
-  const activities = octokitResponse.data;
+  const activities = octokitResponse.data as ActivityArray;
 
   activities.sort((lhs, rhs) => {
-    const lhsCreatedAt = lhs.created_at ? new Date(lhs.created_at) : new Date(0);
-    const rhsCreatedAt = rhs.created_at ? new Date(rhs.created_at) : new Date(0);
+    const lhsCreatedAt = new Date(lhs.created_at);
+    const rhsCreatedAt = new Date(rhs.created_at);
     // We want to sort in creation time's descending order.
     return rhsCreatedAt.getTime() - lhsCreatedAt.getTime();
   });

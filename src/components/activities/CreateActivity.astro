@@ -2,10 +2,10 @@
 import ActivityItem from "@components/activities/ActivityItem.astro";
 import GithubUser from "@components/activities/GithubUser.astro";
 import GithubRepo from "@components/activities/GithubRepo.astro";
-import type { Activity } from "@scripts/activities";
+import type { ActivityOf } from "@scripts/github-types";
 
 interface Props {
-  activity: Activity;
+  activity: ActivityOf<"CreateEvent">;
 }
 
 const { activity } = Astro.props;
@@ -13,19 +13,19 @@ const userName = activity.actor.login;
 const repoName = activity.repo.name;
 
 const message = (() => {
-  const refName = (activity.payload as any).ref;
-  switch ((activity.payload as any).ref_type) {
+  const refName = activity.payload.ref ?? activity.payload.full_ref;
+  switch (activity.payload.ref_type) {
     case "branch":
-      return `created a new branch ${refName} in the repository`;
+      return `created branch ${refName} in repository`;
     case "tag":
-      return `created a new tag ${refName} named in the repository`;
+      return `created tag ${refName} in repository`;
     case "repository":
       return "created a new repository";
   }
 })();
 ---
 
-<ActivityItem timestamp={activity.created_at!}>
+<ActivityItem timestamp={activity.created_at}>
   <span slot="title">
     <GithubUser login={userName} />
     {message}

@@ -2,10 +2,10 @@
 import ActivityItem from "@components/activities/ActivityItem.astro";
 import GithubUser from "@components/activities/GithubUser.astro";
 import GithubRepo from "@components/activities/GithubRepo.astro";
-import type { Activity } from "@scripts/activities";
+import type { ActivityOf } from "@scripts/github-types";
 
 interface Props {
-  activity: Activity;
+  activity: ActivityOf<"CommitCommentEvent">;
 }
 
 const { activity } = Astro.props;
@@ -13,7 +13,7 @@ const userName = activity.actor.login;
 const repoName = activity.repo.name;
 ---
 
-<ActivityItem timestamp={activity.created_at!}>
+<ActivityItem timestamp={activity.created_at}>
   <span slot="title">
     <GithubUser login={userName} />
     commented to a commit in the repository

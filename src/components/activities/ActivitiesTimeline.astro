@@ -2,6 +2,7 @@
 import CommitCommentActivity from "@components/activities/CommitCommentActivity.astro";
 import CreateActivity from "@components/activities/CreateActivity.astro";
 import DeleteActivity from "@components/activities/DeleteActivity.astro";
+import DiscussionActivity from "@components/activities/DiscussionActivity.astro";
 import ForkActivity from "@components/activities/ForkActivity.astro";
 import GollumActivity from "@components/activities/GollumActivity.astro";
 import IssueActivity from "@components/activities/IssueActivity.astro";
@@ -13,9 +14,8 @@ import PullRequestReviewActivity from "@components/activities/PullRequestReviewA
 import PullRequestReviewCommentActivity from "@components/activities/PullRequestReviewCommentActivity.astro";
 import PushActivity from "@components/activities/PushActivity.astro";
 import ReleaseActivity from "@components/activities/ReleaseActivity.astro";
-import SponsorshipActivity from "@components/activities/SponsorshipActivity.astro";
 import WatchActivity from "@components/activities/WatchActivity.astro";
-import type { Activity, ActivityArray } from "@scripts/activities";
+import type { Activity, ActivityArray } from "@scripts/github-types";
 
 interface Props {
   activities: ActivityArray;
@@ -27,6 +27,8 @@ const { activities } = Astro.props;
 <div class="activities">
   {
     activities.map((act: Activity) => {
+      const activityType: string = act.type;
+
       switch (act.type) {
         case "CommitCommentEvent":
           return <CommitCommentActivity activity={act} />;
@@ -36,6 +38,9 @@ const { activities } = Astro.props;
 
         case "DeleteEvent":
           return <DeleteActivity activity={act} />;
+
+        case "DiscussionEvent":
+          return <DiscussionActivity activity={act} />;
 
         case "ForkEvent":
           return <ForkActivity activity={act} />;
@@ -56,7 +61,7 @@ const { activities } = Astro.props;
           return <PublicActivity activity={act} />;
 
         case "PullRequestEvent":
-          return <PullRequestActivity activity={act} />
+          return <PullRequestActivity activity={act} />;
 
         case "PullRequestReviewEvent":
           return <PullRequestReviewActivity activity={act} />;
@@ -70,15 +75,12 @@ const { activities } = Astro.props;
         case "ReleaseEvent":
           return <ReleaseActivity activity={act} />;
 
-        case "SponsorshipEvent":
-          return <SponsorshipActivity activity={act} />;
-
         case "WatchEvent":
           return <WatchActivity activity={act} />;
 
         default: {
-          console.log("unknown activity type: ", act.type);
-          return <></>;
+          console.log("unknown activity type: ", activityType);
+          return null;
         }
       }
     })

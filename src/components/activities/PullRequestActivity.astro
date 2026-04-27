@@ -4,10 +4,10 @@ import GithubUser from "@components/activities/GithubUser.astro";
 import GithubPullRequest from "@components/activities/GithubPullRequest.astro";
 import GithubRepo from "@components/activities/GithubRepo.astro";
 import PullRequestInfo from "@components/activities/PullRequestInfo.astro";
-import type { Activity } from "@scripts/activities";
+import type { ActivityOf } from "@scripts/github-types";
 
 interface Props {
-  activity: Activity;
+  activity: ActivityOf<"PullRequestEvent">;
 }
 
 const { activity } = Astro.props;
@@ -18,37 +18,29 @@ const message = (() => {
   switch (activity.payload.action) {
     case "opened":
       return "opened pull request";
-    case "edited":
-      return "edited pull request";
     case "closed":
       return "closed pull request";
+    case "merged":
+      return "merged pull request";
     case "reopened":
       return "reopened pull request";
     case "assigned":
       return "assigned pull request";
     case "unassigned":
       return "unassigned pull request";
-    case "review_requested":
-      return "requested review for pull request";
-    case "review_request_removed":
-      return "removed review request for pull request";
     case "labeled":
       return "labeled pull request";
     case "unlabeled":
       return "unlabeled pull request";
-    case "synchronize":
-      return "synchronized pull request";
-    default:
-      return "had activities related to pull request";
   }
 })();
 
-const pr = (activity.payload as any).pull_request;
+const pr = activity.payload.pull_request;
 const prNumber: number = pr.number;
-const prTitle: string = pr.title;
+const prTitle = pr.title;
 ---
 
-<ActivityItem timestamp={activity.created_at!}>
+<ActivityItem timestamp={activity.created_at}>
   <span slot="title">
     <GithubUser login={userName} />
     {message}

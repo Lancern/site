@@ -4,22 +4,22 @@ import GithubUser from "@components/activities/GithubUser.astro";
 import GithubPullRequest from "@components/activities/GithubPullRequest.astro";
 import GithubRepo from "@components/activities/GithubRepo.astro";
 import PullRequestInfo from "@components/activities/PullRequestInfo.astro";
-import type { Activity } from "@scripts/activities";
+import type { ActivityOf } from "@scripts/github-types";
 
 interface Props {
-  activity: Activity;
+  activity: ActivityOf<"PullRequestReviewCommentEvent">;
 }
 
 const { activity } = Astro.props;
 const userName = activity.actor.login;
 const repoName = activity.repo.name;
 
-const pr = (activity.payload as any).pull_request;
+const pr = activity.payload.pull_request;
 const prNumber: number = pr.number;
-const prTitle: string = pr.title;
+const prTitle = pr.title;
 ---
 
-<ActivityItem timestamp={activity.created_at!}>
+<ActivityItem timestamp={activity.created_at}>
   <span slot="title">
     <GithubUser login={userName} />
     commented to a review in pull request

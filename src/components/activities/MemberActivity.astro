@@ -2,21 +2,21 @@
 import ActivityItem from "@components/activities/ActivityItem.astro";
 import GithubUser from "@components/activities/GithubUser.astro";
 import GithubRepo from "@components/activities/GithubRepo.astro";
-import type { Activity } from "@scripts/activities";
+import type { ActivityOf } from "@scripts/github-types";
 
 interface Props {
-  activity: Activity;
+  activity: ActivityOf<"MemberEvent">;
 }
 
 const { activity } = Astro.props;
-const userName = activity.actor.login;
+const userName = activity.payload.member.login;
 const repoName = activity.repo.name;
 ---
 
-<ActivityItem timestamp={activity.created_at!}>
+<ActivityItem timestamp={activity.created_at}>
   <span slot="title">
     <GithubUser login={userName} />
-    becomes a collaborator of
+    became a collaborator of
     <GithubRepo name={repoName} />
   </span>
 </ActivityItem>

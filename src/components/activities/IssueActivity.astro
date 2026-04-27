@@ -4,10 +4,10 @@ import GithubUser from "@components/activities/GithubUser.astro";
 import GithubIssue from "@components/activities/GithubIssue.astro";
 import GithubRepo from "@components/activities/GithubRepo.astro";
 import IssueInfo from "@components/activities/IssueInfo.astro";
-import type { Activity } from "@scripts/activities";
+import type { ActivityOf } from "@scripts/github-types";
 
 interface Props {
-  activity: Activity;
+  activity: ActivityOf<"IssuesEvent">;
 }
 
 const { activity } = Astro.props;
@@ -18,31 +18,19 @@ const message = (() => {
   switch (activity.payload.action) {
     case "opened":
       return "opened issue";
-    case "edited":
-      return "edited issue";
     case "closed":
       return "closed issue";
     case "reopened":
       return "reopened issue";
-    case "assigned":
-      return "assigned issue";
-    case "unassigned":
-      return "unassigned issue";
-    case "labeled":
-      return "labeled issue";
-    case "unlabeled":
-      return "unlabeled issue";
-    default:
-      return "had activities related to issue";
   }
 })();
 
-const issue = (activity.payload as any).issue;
+const issue = activity.payload.issue;
 const issueNumber: number = issue.number;
 const issueTitle: string = issue.title;
 ---
 
-<ActivityItem timestamp={activity.created_at!}>
+<ActivityItem timestamp={activity.created_at}>
   <span slot="title">
     <GithubUser login={userName} />
     {message}

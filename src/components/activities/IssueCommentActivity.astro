@@ -4,22 +4,22 @@ import GithubUser from "@components/activities/GithubUser.astro";
 import GithubIssue from "@components/activities/GithubIssue.astro";
 import GithubRepo from "@components/activities/GithubRepo.astro";
 import IssueInfo from "@components/activities/IssueInfo.astro";
-import type { Activity } from "@scripts/activities";
+import type { ActivityOf } from "@scripts/github-types";
 
 interface Props {
-  activity: Activity;
+  activity: ActivityOf<"IssueCommentEvent">;
 }
 
 const { activity } = Astro.props;
 const userName = activity.actor.login;
 const repoName = activity.repo.name;
 
-const issue = (activity.payload as any).issue;
+const issue = activity.payload.issue;
 const issueNumber: number = issue.number;
 const issueTitle: string = issue.title;
 ---
 
-<ActivityItem timestamp={activity.created_at!}>
+<ActivityItem timestamp={activity.created_at}>
   <span slot="title">
     <GithubUser login={userName} />
     commented to issue

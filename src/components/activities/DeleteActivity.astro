@@ -2,10 +2,10 @@
 import ActivityItem from "@components/activities/ActivityItem.astro";
 import GithubUser from "@components/activities/GithubUser.astro";
 import GithubRepo from "@components/activities/GithubRepo.astro";
-import type { Activity } from "@scripts/activities";
+import type { ActivityOf } from "@scripts/github-types";
 
 interface Props {
-  activity: Activity;
+  activity: ActivityOf<"DeleteEvent">;
 }
 
 const { activity } = Astro.props;
@@ -13,17 +13,17 @@ const userName = activity.actor.login;
 const repoName = activity.repo.name;
 
 const message = (() => {
-  const refName = (activity.payload as any).ref;
-  switch ((activity.payload as any).ref_type) {
+  const refName = activity.payload.ref;
+  switch (activity.payload.ref_type) {
     case "branch":
-      return `deleted branch ${refName} in the repository`;
+      return `deleted branch ${refName} in repository`;
     case "tag":
-      return `deleted tag ${refName} in the repository`;
+      return `deleted tag ${refName} in repository`;
   }
 })();
 ---
 
-<ActivityItem timestamp={activity.created_at!}>
+<ActivityItem timestamp={activity.created_at}>
   <span slot="title">
     <GithubUser login={userName} />
     {message}
