@@ -63,13 +63,13 @@ const headIsZero = isZeroHash(head);
         beforeIsZero ? (
           <span>created at</span>
         ) : (
-          <>
+          <Fragment>
             <span>updated from</span>
             <a class="commit-hash" href={getCommitUrl(repoName, before)} target="_blank">
               #{getShortHash(before)}
             </a>
             <span>to</span>
-          </>
+          </Fragment>
         )
       }
       {

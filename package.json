@@ -16,10 +16,11 @@
     "start": "astro dev"
   },
   "dependencies": {
-    "@astrojs/mdx": "^5.0.4",
+    "@astrojs/markdown-remark": "^7.3.3",
+    "@astrojs/mdx": "^8.1.0",
     "@astrojs/rss": "^4.0.18",
-    "@astrojs/vercel": "^10.0.5",
-    "astro": "^6.1.9",
+    "@astrojs/vercel": "^11.0.15",
+    "astro": "^7.4.0",
     "astro-mermaid": "^2.0.1",
     "mermaid": "^11.12.2",
     "octokit": "^4.0.2",
