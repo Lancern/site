@@ -6,16 +6,10 @@ import InfoIcon from "@components/icon/InfoIcon.astro";
 import TextWithIcon from "@components/TextWithIcon.astro";
 import GithubIcon from "@components/icon/GithubIcon.astro";
 
-const keywords = [
-  "C/C++",
-  "Rust",
-  "Python",
-  "TypeScript",
-  "compiler",
-];
+const keywords = ["C/C++", "Rust", "Python", "TypeScript", "compiler"];
 ---
 
-<BaseLayout title="Lancern's Home" hideHeader>
+<BaseLayout title="Lancern's Home" hideHeader centerContent>
   <div class="home">
     <div class="identity-line">
       <img class="identity-avatar" src="/avatar.jpeg" height="64" width="64" />
@@ -54,18 +48,6 @@ const keywords = [
 </BaseLayout>
 
 <style>
-  @media only screen and (max-width: 480px) {
-    .home {
-      padding: 3rem 0;
-    }
-  }
-
-  @media only screen and (min-width: 481px) {
-    .home {
-      padding: 8rem 0;
-    }
-  }
-
   .identity-line {
     display: flex;
     justify-content: center;

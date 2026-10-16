@@ -8,9 +8,10 @@ import "@styles/global.css";
 interface Props {
   title: string;
   hideHeader?: boolean;
+  centerContent?: boolean;
 }
 
-const { title, hideHeader } = Astro.props;
+const { title, hideHeader, centerContent } = Astro.props;
 ---
 
 <html lang="en">
@@ -29,7 +30,7 @@ const { title, hideHeader } = Astro.props;
     />
     <title>{title}</title>
   </head>
-  <body>
+  <body class:list={{ "center-content": centerContent }}>
     <Container>
       {!hideHeader && <Header />}
       <div class="main">
@@ -55,6 +56,11 @@ const { title, hideHeader } = Astro.props;
     padding: 0;
     background-color: var(--main-bg-color);
     color: var(--main-color);
+  }
+
+  .center-content > :global(.container) {
+    display: grid;
+    align-items: center;
   }
 
   @media only screen and (max-width: 480px) {
