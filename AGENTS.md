@@ -5,10 +5,10 @@
 This is Lancern's personal website, built with Astro, TypeScript, and MDX.
 
 - `src/pages/` defines routes; articles live in `posts/YYYY/MM/` as Markdown or MDX.
-- `src/components/` contains reusable Astro components, grouped into `activities/`, `posts/`, and `icon/` where appropriate.
-- `src/layouts/` provides page and article layouts; `src/scripts/` holds post filtering and GitHub activity logic.
+- `src/components/` contains reusable Astro components, grouped into `posts/` and `icon/` where appropriate.
+- `src/layouts/` provides page and article layouts; `src/scripts/` holds post filtering logic.
 - `src/styles/global.css` contains shared styles. `public/` holds static assets, with article images under `images/posts/YYYY/MM/<slug>/`.
-- `astro.config.mjs` configures MDX, Mermaid, math rendering, and the Vercel adapter. Most pages are static; the activities route renders on demand.
+- `astro.config.mjs` configures MDX, Mermaid, math rendering, and the Vercel adapter.
 
 ## Build, Test, and Development Commands
 
@@ -34,4 +34,4 @@ Recent commits use prefixes such as `feat:` and `chore:` with short, imperative 
 
 ## Configuration & Licensing
 
-GitHub activities optionally use `GITHUB_TOKEN`; keep credentials out of commits and client-side code. Preserve the licensing distinction: source code uses MIT, while articles and page content use CC BY 4.0.
+Keep credentials out of commits and client-side code. Preserve the licensing distinction: source code uses MIT, while articles and page content use CC BY 4.0.

@@ -23,7 +23,6 @@
     "astro": "^7.4.0",
     "astro-mermaid": "^2.0.1",
     "mermaid": "^11.12.2",
-    "octokit": "^4.0.2",
     "rehype-mathjax": "^6.0.0",
     "remark-math": "^6.0.0"
   },
