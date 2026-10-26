@@ -6,6 +6,7 @@ import BookmarkIcon from "@components/icon/BookmarkIcon.astro";
 import CalendarIcon from "@components/icon/CalendarIcon.astro";
 import CopyrightIcon from "@components/icon/CopyrightIcon.astro";
 import TextWithIcon from "@components/TextWithIcon.astro";
+import BackToTop from "@components/posts/BackToTop.astro";
 
 import type { PostFrontmatter } from "@scripts/posts";
 import Tag from "@components/Tag.astro";
@@ -47,6 +48,7 @@ const tags = frontmatter.tags ?? [];
     </a>
   </div>
   <slot />
+  <BackToTop />
   <div class="tags-line" slot="footer">
     {tags.map((t) => <Tag name={t} button />)}
   </div>

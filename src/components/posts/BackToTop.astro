@@ -1,0 +1,61 @@
+---
+import UpArrowIcon from "@components/icon/UpArrowIcon.astro";
+---
+
+<button id="back-to-top" type="button" aria-label="Back to top" title="Back to top" hidden>
+  <UpArrowIcon size="1.5rem" />
+</button>
+
+<script>
+  const button = document.querySelector<HTMLButtonElement>("#back-to-top");
+
+  if (button) {
+    const updateVisibility = () => {
+      button.hidden = window.scrollY <= 0;
+    };
+
+    window.addEventListener("scroll", updateVisibility, { passive: true });
+    window.addEventListener("pageshow", updateVisibility);
+    updateVisibility();
+
+    button.addEventListener("click", () => {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    });
+  }
+</script>
+
+<style>
+  button {
+    position: fixed;
+    right: max(1rem, env(safe-area-inset-right));
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    padding: 0;
+    border: 1px solid var(--card-border-color);
+    border-radius: 50%;
+    background-color: var(--button-bg-color);
+    cursor: pointer;
+  }
+
+  button[hidden] {
+    display: none;
+  }
+
+  button:hover {
+    background-color: var(--button-hover-color);
+  }
+
+  button:focus-visible {
+    outline: 2px solid var(--main-color);
+    outline-offset: 3px;
+    background-color: var(--button-focus-color);
+  }
+
+  button :global(path) {
+    stroke: var(--main-color);
+  }
+</style>
