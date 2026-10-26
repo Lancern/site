@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
-from datetime import date as Date
 import os
-from pathlib import Path
 import re
 import sys
+from argparse import ArgumentParser
+from datetime import date as Date
+from pathlib import Path
 
 
 def main():
@@ -60,8 +60,8 @@ def _new(args):
         "src",
         "pages",
         "posts",
-        "{:04d}".format(date.year),
-        "{:02d}".format(date.month),
+        f"{date.year:04d}",
+        f"{date.month:02d}",
         post_file_name,
     )
     post_dir = post_path.parent
@@ -76,29 +76,21 @@ def _new(args):
     try:
         post_dir.mkdir(parents=True, exist_ok=True)
     except OSError as err:
-        print(
-            "Cannot create directory {}: {} ({})".format(
-                post_dir, err.strerror, err.errno
-            )
-        )
+        print(f"Cannot create directory {post_dir}: {err.strerror} ({err.errno})")
         sys.exit(1)
 
     try:
-        post_fp = open(post_path, "w")
+        post_fp = open(post_path, "w")  # noqa: SIM115
     except OSError as err:
-        print(
-            "Cannot open post file {}: {} ({})".format(
-                post_path, err.strerror, err.errno
-            )
-        )
+        print(f"Cannot open post file {post_path}: {err.strerror} ({err.errno})")
         sys.exit(1)
 
     with post_fp:
         print("---", file=post_fp)
         print('layout: "@layouts/PostLayout.astro"', file=post_fp)
-        print("title: {}".format(args.slug), file=post_fp)
+        print(f"title: {args.slug}", file=post_fp)
         print(
-            "date: {:%Y-%m-%d}".format(date),
+            f"date: {date:%Y-%m-%d}",
             file=post_fp,
         )
         print("category:", file=post_fp)
